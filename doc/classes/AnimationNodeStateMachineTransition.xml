@@ -22,6 +22,9 @@
 		<member name="disabled" type="bool" setter="set_disabled" getter="is_disabled" default="false">
 			Don't use this transition during [method AnimationNodeStateMachinePlayback.travel] or [member auto_advance].
 		</member>
+		<member name="invert_condition" type="bool" setter="set_invert_condition" getter="get_invert_condition" default="false">
+			Turn on auto advance when [member advance_condition] is false
+		</member>
 		<member name="priority" type="int" setter="set_priority" getter="get_priority" default="1">
 			Lower priority transitions are preferred when travelling through the tree via [method AnimationNodeStateMachinePlayback.travel] or [member auto_advance].
 		</member>
