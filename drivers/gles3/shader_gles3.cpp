@@ -257,7 +257,7 @@ void ShaderGLES3::_compile_specialization(Version::Specialization &spec, uint32_
 
 				err_string += ilogmem;
 
-				_display_error_with_code(err_string, builder_string);
+				//_display_error_with_code(err_string, builder_string);
 
 				Memory::free_static(ilogmem);
 				glDeleteShader(spec.vert_id);
