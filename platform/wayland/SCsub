@@ -1,0 +1,18 @@
+#!/usr/bin/env python
+
+Import("env")
+
+from platform_methods import run_in_subprocess
+import platform_wayland_builders
+
+common_wayland = [
+    "context_gl_wayland.cpp",
+    "crash_handler_wayland.cpp",
+    "os_wayland.cpp",
+    "power_wayland.cpp",
+]
+
+prog = env.add_program("#bin/godot", ["godot_wayland.cpp"] + common_wayland)
+
+if env["debug_symbols"] and env["separate_debug_symbols"]:
+    env.AddPostAction(prog, run_in_subprocess(platform_wayland_builders.make_debug_wayland))
