@@ -445,7 +445,7 @@ def configure(env):
             env.Append(LIBS=["glslang", "SPIRV"])
 
     env.Append(CPPDEFINES=["GLES3_ENABLED"])
-    env.ParseConfig("pkg-config gl --cflags --libs")
+    #env.ParseConfig("pkg-config gl --cflags --libs")
 
     env.Append(LIBS=["pthread"])
 
