@@ -5,12 +5,41 @@ Import("env")
 from platform_methods import run_in_subprocess
 import platform_wayland_builders
 
+WAYLAND_BUILDERS = {
+    "WAYLAND_API_HEADER": Builder(
+        action=Action(
+            "wayland-scanner -c client-header ${SOURCE} ${TARGET}", 'Building Wayland client header: "${TARGET}"'
+        ),
+        single_source=True,
+    ),
+    "WAYLAND_API_CODE": Builder(
+        action=Action(
+            "wayland-scanner -c private-code ${SOURCE} ${TARGET}",
+            'Building Wayland protocol marshalling code: "${TARGET}"',
+        ),
+        single_source=True,
+    ),
+}
+env.Append(BUILDERS=WAYLAND_BUILDERS)
+
+env.WAYLAND_API_HEADER(
+    target="xdg_shell.gen.h", source="#thirdparty/wayland-protocols/stable/xdg-shell/xdg-shell.xml"
+)
+
+env.WAYLAND_API_CODE(
+    target="xdg_shell.gen.c", source="#thirdparty/wayland-protocols/stable/xdg-shell/xdg-shell.xml"
+)
+
 common_wayland = [
     "context_gl_wayland.cpp",
     "crash_handler_wayland.cpp",
     "os_wayland.cpp",
     "power_wayland.cpp",
+    "window/window_wayland.cpp",
+    "window/native_window_wayland.cpp",
+    "xdg_shell.gen.c",
 ]
+
 
 prog = env.add_program("#bin/godot", ["godot_wayland.cpp"] + common_wayland)
 
