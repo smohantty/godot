@@ -47,12 +47,15 @@
 #include "servers/visual/rasterizer.h"
 #include "servers/visual_server.h"
 
+#include "window/window_wayland.h"
+
 class OS_Wayland : public OS_Unix {
     CrashHandler crash_handler;
-    int video_driver_index{0};
 
+	WindowWayland *wayland_window;
     VisualServer *visual_server;
 	VideoMode current_videomode;
+	int current_video_driver;
     List<String> args;
     MainLoop *main_loop;
 
@@ -96,6 +99,8 @@ class OS_Wayland : public OS_Unix {
 
 protected:
 	virtual int get_current_video_driver() const;
+	virtual int get_video_driver_count() const;
+	virtual const char *get_video_driver_name(int p_driver) const;
 
 	virtual void initialize_core();
 	virtual Error initialize(const VideoMode &p_desired, int p_video_driver, int p_audio_driver);

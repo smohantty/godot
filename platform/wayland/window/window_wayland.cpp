@@ -53,7 +53,7 @@ const xdg_toplevel_listener WindowWayland::kXdgToplevelListener = {
           auto is_maximized = false;
           auto is_resizing = false;
           uint32_t* state = static_cast<uint32_t*>(states->data);
-          for (auto i = 0; i < states->size; i++) {
+          for (size_t i = 0; i < states->size; i++) {
             switch (*state) {
               case XDG_TOPLEVEL_STATE_MAXIMIZED:
                 is_maximized = true;
@@ -474,6 +474,79 @@ WindowWayland::WindowWayland(WindowProperties p_properties) {
     wl_display_dispatch(wl_display_);
     wl_display_roundtrip(wl_display_);
 
+    display_valid_ = true;
+    running_ = true;
+}
+
+WindowWayland::~WindowWayland() {
+    display_valid_ = false;
+    running_ = false;
+    if (wl_cursor_theme_) {
+      wl_cursor_theme_destroy(wl_cursor_theme_);
+      wl_cursor_theme_ = nullptr;
+    }
+
+    if (wl_pointer_) {
+      wl_pointer_destroy(wl_pointer_);
+      wl_pointer_ = nullptr;
+    }
+
+    if (wl_touch_) {
+      wl_touch_destroy(wl_touch_);
+      wl_touch_ = nullptr;
+    }
+
+    if (wl_keyboard_) {
+      wl_keyboard_destroy(wl_keyboard_);
+      wl_keyboard_ = nullptr;
+    }
+
+    if (wl_seat_) {
+      wl_seat_destroy(wl_seat_);
+      wl_seat_ = nullptr;
+    }
+
+    if (wl_output_) {
+      wl_output_destroy(wl_output_);
+      wl_output_ = nullptr;
+    }
+
+    if (wl_shm_) {
+      wl_shm_destroy(wl_shm_);
+      wl_shm_ = nullptr;
+    }
+
+    if (xdg_toplevel_) {
+      xdg_toplevel_destroy(xdg_toplevel_);
+      xdg_toplevel_ = nullptr;
+    }
+
+    if (xdg_wm_base_) {
+      xdg_wm_base_destroy(xdg_wm_base_);
+      xdg_wm_base_ = nullptr;
+    }
+
+    if (wl_compositor_) {
+      wl_compositor_destroy(wl_compositor_);
+      wl_compositor_ = nullptr;
+    }
+
+    // if (wl_subcompositor_) {
+    //   wl_subcompositor_destroy(wl_subcompositor_);
+    //   wl_subcompositor_ = nullptr;
+    // }
+
+    if (wl_registry_) {
+      wl_registry_destroy(wl_registry_);
+      wl_registry_ = nullptr;
+    }
+
+    if (wl_display_) {
+      wl_display_flush(wl_display_);
+      wl_display_disconnect(wl_display_);
+      wl_display_ = nullptr;
+    }  
+
 }
 
 void WindowWayland::wl_registry_add(wl_registry* wl_registry,
@@ -483,6 +556,7 @@ void WindowWayland::wl_registry_add(wl_registry* wl_registry,
     if (!strcmp(interface, wl_compositor_interface.name)) {
     wl_compositor_ = static_cast<decltype(wl_compositor_)>(
         wl_registry_bind(wl_registry, name, &wl_compositor_interface, 1));
+    print_line("wl_compositor_interface");
     return;
     }
 
@@ -490,6 +564,7 @@ void WindowWayland::wl_registry_add(wl_registry* wl_registry,
         xdg_wm_base_ = static_cast<decltype(xdg_wm_base_)>(
             wl_registry_bind(wl_registry, name, &xdg_wm_base_interface, 1));
         xdg_wm_base_add_listener(xdg_wm_base_, &kXdgWmBaseListener, this);
+        print_line("xdg_wm_base_interface");
         return;
     }
 
@@ -497,6 +572,7 @@ void WindowWayland::wl_registry_add(wl_registry* wl_registry,
         wl_seat_ = static_cast<decltype(wl_seat_)>(
             wl_registry_bind(wl_registry, name, &wl_seat_interface, 1));
         wl_seat_add_listener(wl_seat_, &kWlSeatListener, this);
+        print_line("wl_seat_interface");
         return;
     }
 
@@ -504,10 +580,12 @@ void WindowWayland::wl_registry_add(wl_registry* wl_registry,
         wl_output_ = static_cast<decltype(wl_output_)>(
             wl_registry_bind(wl_registry, name, &wl_output_interface, 1));
         wl_output_add_listener(wl_output_, &kWlOutputListener, this);
+        print_line("wl_output_interface");
         return;
     }
 
     if (!strcmp(interface, wl_shm_interface.name)) {
+        print_line("wl_shm_interface");
         if (window_properties_.use_mouse_cursor) {
             wl_shm_ = static_cast<decltype(wl_shm_)>(
                 wl_registry_bind(wl_registry, name, &wl_shm_interface, 1));
@@ -526,4 +604,73 @@ void WindowWayland::wl_registry_add(wl_registry* wl_registry,
 void WindowWayland::wl_registry_remove(wl_registry* wl_registry, uint32_t name) {
 
 }
+
+bool WindowWayland::create_render_surface(int width, int height) {
+    if (!display_valid_) {
+      print_line("Wayland display is invalid.");
+      return false;
+    }
+
+    if (!wl_compositor_) {
+      print_line("Wl_compositor is invalid");
+      return false;
+    }
+
+    if (!xdg_wm_base_) {
+      print_line("Xdg-shell is invalid");
+      return false;
+    }
+
+    if (window_properties_.fullscreen) {
+      width = window_properties_.width;
+      height = window_properties_.height;
+    }
+
+    print_line(vformat("create wayland surface : %d X %d ",width, height));
+
+    native_window_ = memnew(NativeWindowWayland(wl_display_, wl_compositor_, width, height));
+
+    xdg_surface_ = xdg_wm_base_get_xdg_surface(xdg_wm_base_, native_window_->surface());
+  
+    if (!xdg_surface_) {
+        print_line("Failed to get the xdg surface.");
+        return false;
+    }
+
+    xdg_surface_add_listener(xdg_surface_, &kXdgSurfaceListener, this);
+
+    xdg_toplevel_ = xdg_surface_get_toplevel(xdg_surface_);
+    xdg_toplevel_set_title(xdg_toplevel_, "Godot");
+    xdg_toplevel_add_listener(xdg_toplevel_, &kXdgToplevelListener, this);
+    wl_surface_commit(native_window_->surface());
+
+    context_egl = memnew(ContextEgl(native_window_));
+
+  return true;
+
+}
+
+void WindowWayland::destroy_render_surface() {
+    // if (window_decorations_) {
+    //   window_decorations_ = nullptr;
+    // }
+    // render_surface_ = nullptr;
+    memdelete(native_window_);
+    native_window_ = nullptr;
+
+    if (xdg_surface_) {
+      xdg_surface_destroy(xdg_surface_);
+      xdg_surface_ = nullptr;
+    }
+
+    // if (wl_cursor_surface_) {
+    //   wl_surface_destroy(wl_cursor_surface_);
+    //   wl_cursor_surface_ = nullptr;
+    // } 
+}
+
+RenderSurfaceTarget* WindowWayland::get_render_surface_target() const {
+  return nullptr;
+}
+
 

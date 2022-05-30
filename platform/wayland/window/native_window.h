@@ -11,6 +11,9 @@ class NativeWindow {
 
   EGLNativeWindowType window() const { return window_; }
 
+  EGLNativeDisplayType display() const {return display_;}
+
+
   int32_t width() const {
     if (!valid_) {
       return -1;
@@ -29,6 +32,7 @@ class NativeWindow {
 
  protected:
   EGLNativeWindowType window_;
+  EGLNativeDisplayType display_;
   int32_t width_;
   int32_t height_;
   bool valid_{false};

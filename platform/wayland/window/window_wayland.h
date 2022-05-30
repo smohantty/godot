@@ -6,6 +6,8 @@
 #include <wayland-client.h>
 #include <wayland-cursor.h>
 #include "xdg_shell.gen.h"
+#include "native_window_wayland.h"
+#include "context_egl.h"
 
 
 struct WindowProperties {
@@ -15,10 +17,15 @@ struct WindowProperties {
     bool use_window_decoration{false};
     bool use_mouse_cursor{true};
 };
+
 class WindowWayland : public WindowBindingHandler {
 public:
     WindowWayland(WindowProperties p_properties);
     ~WindowWayland();
+    virtual bool create_render_surface(int width, int height);
+    virtual void destroy_render_surface();
+    RenderSurfaceTarget* get_render_surface_target() const;
+
 private:
     struct CursorInfo {
         String cursor_name;
@@ -30,6 +37,11 @@ private:
     void wl_registry_add(wl_registry* wl_registry, uint32_t name,
                          const char* interface, uint32_t version);
     void wl_registry_remove(wl_registry* wl_registry, uint32_t name);
+
+    NativeWindowWayland  *native_window_;
+    RenderSurfaceTarget  *render_surface_;
+    ContextEgl           *context_egl;
+
 
     //decoration
     bool    restore_window_required_{false};

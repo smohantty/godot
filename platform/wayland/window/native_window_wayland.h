@@ -6,7 +6,7 @@
 
 class NativeWindowWayland : public NativeWindow {
  public:
-  NativeWindowWayland(wl_compositor* compositor, size_t width, size_t height);
+  NativeWindowWayland(wl_display* display, wl_compositor* compositor, size_t width, size_t height);
   ~NativeWindowWayland();
 
   bool resize(size_t p_width, size_t p_height) override;

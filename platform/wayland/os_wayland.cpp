@@ -40,9 +40,28 @@
 #include "servers/visual/visual_server_raster.h"
 #include "servers/visual/visual_server_wrap_mt.h"
 
+#define VIDEO_DRIVER_GLES2 1
+#define VIDEO_DRIVER_GLES3 0
+
+#define VIDEO_DRIVER_COUNT 2
 
 int OS_Wayland::get_current_video_driver() const {
-	return video_driver_index;
+	return current_video_driver;
+}
+
+int OS_Wayland::get_video_driver_count() const {
+	return VIDEO_DRIVER_COUNT;
+}
+
+const char *OS_Wayland::get_video_driver_name(int p_driver) const {
+	switch (p_driver) {
+		case VIDEO_DRIVER_GLES3:
+			return "GLES3";
+		case VIDEO_DRIVER_GLES2:
+			return "GLES2";
+	}
+	print_line(vformat("Invalid video driver index: %d ", p_driver));
+	return "GLES2";
 }
 
 void OS_Wayland::set_main_loop(MainLoop *p_main_loop) {
@@ -72,6 +91,33 @@ Error OS_Wayland::initialize(const VideoMode &p_desired, int p_video_driver, int
     current_videomode = p_desired;
 	main_loop = nullptr;
     //TODO
+	WindowProperties props;
+	props.width = current_videomode.width;
+	props.height = current_videomode.height;
+	props.fullscreen = current_videomode.fullscreen;
+
+	wayland_window = memnew(WindowWayland(props));
+
+	wayland_window->create_render_surface(current_videomode.width, current_videomode.height);
+
+	if (p_video_driver == VIDEO_DRIVER_GLES3) {
+		RasterizerGLES3::register_config();
+		RasterizerGLES3::make_current();
+		current_video_driver = VIDEO_DRIVER_GLES3;
+	} else {
+		RasterizerGLES2::is_viable();
+		RasterizerGLES2::register_config();
+		RasterizerGLES2::make_current();
+		current_video_driver = VIDEO_DRIVER_GLES2;
+	}
+	visual_server = memnew(VisualServerRaster);
+	if (get_render_thread_mode() != RENDER_THREAD_UNSAFE) {
+		visual_server = memnew(VisualServerWrapMT(visual_server, get_render_thread_mode() == RENDER_SEPARATE_THREAD));
+	}
+
+	AudioDriverManager::initialize(p_audio_driver);
+
+	input = memnew(InputDefault);
 
     return OK;
 }
@@ -101,7 +147,8 @@ void OS_Wayland::get_fullscreen_mode_list(List<VideoMode> *p_list, int p_screen)
 }
 
 bool OS_Wayland::_check_internal_feature_support(const String &p_feature) {
-    return p_feature == "pc";
+	print_line("Features : " + p_feature);
+    return p_feature == "mobile";
 }
 
 Point2 OS_Wayland::get_mouse_position() const {
@@ -127,6 +174,7 @@ bool OS_Wayland::can_draw() const {
 }
 
 OS_Wayland::OS_Wayland() {
+	current_video_driver = VIDEO_DRIVER_GLES2;
 #ifdef PULSEAUDIO_ENABLED
 	AudioDriverManager::add_driver(&driver_pulseaudio);
 #endif

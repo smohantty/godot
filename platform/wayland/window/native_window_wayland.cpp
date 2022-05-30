@@ -1,7 +1,8 @@
 #include "native_window_wayland.h"
 #include "core/print_string.h"
 
-NativeWindowWayland::NativeWindowWayland(wl_compositor* p_compositor, size_t p_width, size_t p_height) {
+NativeWindowWayland::NativeWindowWayland(wl_display* display, wl_compositor* p_compositor, size_t p_width, size_t p_height) {
+  display_ = display;
   surface_ = wl_compositor_create_surface(p_compositor);
   if (!surface_) {
     print_line("Failed to create the compositor surface.");
