@@ -723,4 +723,35 @@ RenderSurfaceTarget* WindowWayland::get_render_surface_target() const {
   return nullptr;
 }
 
+void WindowWayland::process_events() {
+    MutexLock mutex_lock(wayland_event_poll_.mutex);
+
+    int werror = wl_display_get_error(wl_display_);
+
+    if (werror) {
+      if (werror == EPROTO) {
+        struct wl_interface *wl_interface = nullptr;
+        uint32_t id = 0;
+
+        int error_code = wl_display_get_protocol_error(wl_display_, (const struct wl_interface **)&wl_interface, &id);
+        print_error(vformat("Wayland protocol error %d on interface %s@%d", error_code, wl_interface ? wl_interface->name : "unknown", id));
+      } else {
+        print_error(vformat("Wayland client error code %d", werror));
+      }
+    }
+  // TODO process all the pending events.
+  
+}
+
+void WindowWayland::make_current() {
+  context_egl->make_current();
+}
+
+void WindowWayland::release_current() {
+    context_egl->release_current();
+}
+
+void WindowWayland::swap_buffers() {
+    context_egl->swap_buffers();
+}
 

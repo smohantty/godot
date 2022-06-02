@@ -54,3 +54,21 @@ ContextEgl::ContextEgl(NativeWindow* native_window) {
         print_line("Failed to make the EGL context current: ");
     }
 }
+
+void ContextEgl::make_current() {
+    if (eglMakeCurrent(display_, surface_, surface_, context_) != EGL_TRUE) {
+        print_line("Failed to make the EGL context current: ");
+    }
+}
+
+void ContextEgl::release_current() {
+    if (eglMakeCurrent(display_, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT) != EGL_TRUE) {
+        print_line("Failed to release the current EGL context: ");
+    }
+}
+
+void ContextEgl::swap_buffers() {
+  if (eglSwapBuffers(display_, surface_) != EGL_TRUE) {
+    print_line("Failed to swap the EGL buffer: ");
+  }
+}

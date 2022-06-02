@@ -188,6 +188,18 @@ bool OS_Wayland::can_draw() const {
     return !minimized;
 }
 
+void OS_Wayland::release_rendering_thread() {
+	wayland_window->release_current();
+}
+
+void OS_Wayland::make_rendering_thread() {
+	wayland_window->make_current();
+}
+
+void OS_Wayland::swap_buffers() {
+	wayland_window->swap_buffers();
+}
+
 OS_Wayland::OS_Wayland() {
 	current_video_driver = VIDEO_DRIVER_GLES3;
 #ifdef PULSEAUDIO_ENABLED
@@ -209,13 +221,8 @@ void OS_Wayland::run() {
 
  	main_loop->init();
 
-	//uint64_t last_ticks=get_ticks_usec();
-
-	//int frames=0;
-	//uint64_t frame=0;
-
 	while (!force_quit) {
-		//process_xevents(); // get rid of pending events
+		wayland_window->process_events();
 // #ifdef JOYDEV_ENABLED
 // 		joypad->process_joypads();
 // #endif

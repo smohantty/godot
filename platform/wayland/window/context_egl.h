@@ -8,6 +8,9 @@ class ContextEgl {
  public:
     ContextEgl(NativeWindow* window);
     ~ContextEgl();
+    void make_current();
+    void release_current();
+    void swap_buffers();
  private:
     EGLDisplay display_;
     EGLConfig  config_;

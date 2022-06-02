@@ -81,7 +81,7 @@ class OS_Wayland : public OS_Unix {
 	uint32_t last_button_state;
 
 	bool force_quit;
-	bool minimized;
+	bool minimized{false};
 	bool window_has_focus;
 	bool do_mouse_warp;
 
@@ -126,6 +126,10 @@ protected:
     virtual Size2 get_window_size() const;
     
     virtual bool can_draw() const;
+
+	virtual void release_rendering_thread();
+	virtual void make_rendering_thread();
+	virtual void swap_buffers();
 
 public:
     void run();

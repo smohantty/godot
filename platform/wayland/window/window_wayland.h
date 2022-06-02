@@ -27,6 +27,12 @@ public:
     virtual void destroy_render_surface();
     RenderSurfaceTarget* get_render_surface_target() const;
 
+    void process_events();
+
+    void make_current();
+    void release_current();
+    void swap_buffers();
+
 private:
     struct CursorInfo {
         String cursor_name;
