@@ -323,7 +323,7 @@ def configure(env):
         env.ParseConfig("pkg-config zlib --cflags --libs")
 
     env.Prepend(CPPPATH=["#platform/wayland"])
-    env.Append(CPPDEFINES=["WAYLAND_ENABLED", "UNIX_ENABLED", "OPENGL_ENABLED", "GLES_ENABLED", ("_FILE_OFFSET_BITS", 64)])
+    env.Append(CPPDEFINES=["WAYLAND_ENABLED", "UNIX_ENABLED", 'GLES3_ENABLED', 'GLES2_ENABLED',"GLES_ENABLED", ("_FILE_OFFSET_BITS", 64)])
 
     #env.ParseConfig("pkg-config gl --cflags --libs")
 

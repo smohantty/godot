@@ -1,14 +1,15 @@
 #ifndef WINDOW_WAYLAND_H_
 #define WINDOW_WAYLAND_H_
 
-#include "window_bindings.h"
-
+#include <poll.h>
 #include <wayland-client.h>
 #include <wayland-cursor.h>
+
+#include "window_bindings.h"
 #include "xdg_shell.gen.h"
 #include "native_window_wayland.h"
 #include "context_egl.h"
-
+#include "core/os/thread.h"
 
 struct WindowProperties {
     int  width;
@@ -32,16 +33,27 @@ private:
         uint32_t serial;
         wl_pointer* pointer;
     };
+    
+    struct WaylandEventPoll {
+		Mutex mutex;
+		wl_display *display{nullptr};
+        SafeFlag events_thread_done;
+    };
+
     WindowBindingHandlerDelegate* binding_handler_delegate_{nullptr};
 
     void wl_registry_add(wl_registry* wl_registry, uint32_t name,
                          const char* interface, uint32_t version);
     void wl_registry_remove(wl_registry* wl_registry, uint32_t name);
 
+    static void _poll_events_thread(void *p_data);
+
     NativeWindowWayland  *native_window_;
     RenderSurfaceTarget  *render_surface_;
     ContextEgl           *context_egl;
 
+    Thread                events_thread_;
+    WaylandEventPoll      wayland_event_poll_;        
 
     //decoration
     bool    restore_window_required_{false};

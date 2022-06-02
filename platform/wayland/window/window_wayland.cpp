@@ -455,6 +455,45 @@ const wl_keyboard_listener WindowWayland::kWlKeyboardListener = {
 };
 
 
+void WindowWayland::_poll_events_thread(void *p_wls) {
+	WaylandEventPoll *event_data = (WaylandEventPoll *)p_wls;
+
+	struct pollfd poll_fd;
+	poll_fd.fd = wl_display_get_fd(event_data->display);
+	poll_fd.events = POLLIN | POLLHUP;
+
+	while (true) {
+		// Empty the event queue while it's full.
+		while (wl_display_prepare_read(event_data->display) != 0) {
+			MutexLock mutex_lock(event_data->mutex);
+			wl_display_dispatch_pending(event_data->display);
+		}
+
+		errno = 0;
+		if (wl_display_flush(event_data->display) == -1) {
+			if (errno != EAGAIN) {
+				print_error(vformat("Error %d while flushing the Wayland display.", errno));
+				event_data->events_thread_done.set();
+			}
+		}
+
+		// Wait for the event file descriptor to have new data.
+		poll(&poll_fd, 1, -1);
+
+		if (event_data->events_thread_done.is_set()) {
+			wl_display_cancel_read(event_data->display);
+			break;
+		}
+
+		if (poll_fd.revents | POLLIN) {
+			wl_display_read_events(event_data->display);
+		} else {
+			wl_display_cancel_read(event_data->display);
+		}
+	}
+}
+
+
 WindowWayland::WindowWayland(WindowProperties p_properties) {
     window_properties_ = p_properties;
     
@@ -476,9 +515,20 @@ WindowWayland::WindowWayland(WindowProperties p_properties) {
 
     display_valid_ = true;
     running_ = true;
+
+    wayland_event_poll_.display = wl_display_;
+    events_thread_.start(_poll_events_thread, &wayland_event_poll_);
 }
 
 WindowWayland::~WindowWayland() {
+
+    wayland_event_poll_.events_thread_done.set();
+
+    // Wait for any Wayland events to be handled and unblock the polling thread.
+    wl_display_roundtrip(wayland_event_poll_.display);
+
+    events_thread_.wait_to_finish();
+
     display_valid_ = false;
     running_ = false;
     if (wl_cursor_theme_) {

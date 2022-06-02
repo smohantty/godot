@@ -33,15 +33,17 @@
 #include "core/os/dir_access.h"
 #include "core/print_string.h"
 //#include "detect_prime.h"
-#include "drivers/gles2/rasterizer_gles2.h"
+
 #include "drivers/gles3/rasterizer_gles3.h"
+#define FRT_DL_SKIP
+#include "drivers/gles2/rasterizer_gles2.h"
 //#include "key_mapping_x11.h"
 #include "main/main.h"
 #include "servers/visual/visual_server_raster.h"
 #include "servers/visual/visual_server_wrap_mt.h"
 
-#define VIDEO_DRIVER_GLES2 1
-#define VIDEO_DRIVER_GLES3 0
+#define VIDEO_DRIVER_GLES2 0
+#define VIDEO_DRIVER_GLES3 1
 
 #define VIDEO_DRIVER_COUNT 2
 
@@ -86,6 +88,7 @@ void OS_Wayland::initialize_core() {
 	OS_Unix::initialize_core();
 }
 
+
 Error OS_Wayland::initialize(const VideoMode &p_desired, int p_video_driver, int p_audio_driver) {
     args = OS::get_singleton()->get_cmdline_args();
     current_videomode = p_desired;
@@ -99,21 +102,33 @@ Error OS_Wayland::initialize(const VideoMode &p_desired, int p_video_driver, int
 	wayland_window = memnew(WindowWayland(props));
 
 	wayland_window->create_render_surface(current_videomode.width, current_videomode.height);
+	auto get_proc_address = [](const char* name ) -> void* {
+		auto address = eglGetProcAddress(name);
+		if (!address) {
+			print_line("Failed eglGetProcAddress: ");
+			return nullptr;
+		}
+		return reinterpret_cast<void*>(address);
+	};
 
 	if (p_video_driver == VIDEO_DRIVER_GLES3) {
+		frt_resolve_symbols_gles3(get_proc_address);
 		RasterizerGLES3::register_config();
 		RasterizerGLES3::make_current();
 		current_video_driver = VIDEO_DRIVER_GLES3;
 	} else {
-		RasterizerGLES2::is_viable();
+		frt_resolve_symbols_gles2(get_proc_address);
 		RasterizerGLES2::register_config();
 		RasterizerGLES2::make_current();
 		current_video_driver = VIDEO_DRIVER_GLES2;
 	}
+
 	visual_server = memnew(VisualServerRaster);
 	if (get_render_thread_mode() != RENDER_THREAD_UNSAFE) {
 		visual_server = memnew(VisualServerWrapMT(visual_server, get_render_thread_mode() == RENDER_SEPARATE_THREAD));
 	}
+
+	visual_server->init();
 
 	AudioDriverManager::initialize(p_audio_driver);
 
@@ -174,7 +189,7 @@ bool OS_Wayland::can_draw() const {
 }
 
 OS_Wayland::OS_Wayland() {
-	current_video_driver = VIDEO_DRIVER_GLES2;
+	current_video_driver = VIDEO_DRIVER_GLES3;
 #ifdef PULSEAUDIO_ENABLED
 	AudioDriverManager::add_driver(&driver_pulseaudio);
 #endif
@@ -186,28 +201,28 @@ OS_Wayland::OS_Wayland() {
 }
 
 void OS_Wayland::run() {
-// 	force_quit = false;
+	force_quit = false;
 
-// 	if (!main_loop) {
-// 		return;
-// 	}
+	if (!main_loop) {
+		return;
+	}
 
-// 	main_loop->init();
+ 	main_loop->init();
 
-// 	//uint64_t last_ticks=get_ticks_usec();
+	//uint64_t last_ticks=get_ticks_usec();
 
-// 	//int frames=0;
-// 	//uint64_t frame=0;
+	//int frames=0;
+	//uint64_t frame=0;
 
-// 	while (!force_quit) {
-// 		process_xevents(); // get rid of pending events
+	while (!force_quit) {
+		//process_xevents(); // get rid of pending events
 // #ifdef JOYDEV_ENABLED
 // 		joypad->process_joypads();
 // #endif
-// 		if (Main::iteration()) {
-// 			break;
-// 		}
-// 	};
+		if (Main::iteration()) {
+			break;
+		}
+	};
 
-// 	main_loop->finish();
+	main_loop->finish();
 }

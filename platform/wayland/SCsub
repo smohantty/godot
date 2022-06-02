@@ -30,6 +30,21 @@ env.WAYLAND_API_CODE(
     target="xdg_shell.gen.c", source="#thirdparty/wayland-protocols/stable/xdg-shell/xdg-shell.xml"
 )
 
+import sys
+dl_path = './dl'
+sys.path.append(dl_path)
+import procdl
+sys.path.remove(dl_path)
+
+env.Append(BUILDERS={'DLH': env.Builder(action=procdl.build_h_action, suffix='.gen.h', src_suffix='.dl')})
+env.Append(BUILDERS={'DLCPP': env.Builder(action=procdl.build_cc_action, suffix='.gen.cc', src_suffix='.dl')})
+
+for dl in Glob('dl/*.dl'):
+	env.DLH(str(dl))
+	env.DLCPP(str(dl))
+for libname in ['gles2', 'gles3']:
+	env.Depends('platform_config.h', 'dl/' + libname + '.gen.h')
+
 common_wayland = [
     "context_gl_wayland.cpp",
     "crash_handler_wayland.cpp",
@@ -39,6 +54,8 @@ common_wayland = [
     "window/native_window_wayland.cpp",
     "window/context_egl.cpp",
     "xdg_shell.gen.c",
+    "dl/gles2.gen.cc", 
+    "dl/gles3.gen.cc",
 ]
 
 
