@@ -43,7 +43,7 @@ def get_opts():
         BoolVariable("use_lsan", "Use LLVM/GCC compiler leak sanitizer (LSAN))", False),
         BoolVariable("use_tsan", "Use LLVM/GCC compiler thread sanitizer (TSAN))", False),
         BoolVariable("use_msan", "Use LLVM/GCC compiler memory sanitizer (MSAN))", False),
-        BoolVariable("pulseaudio", "Detect and use PulseAudio", True),
+        BoolVariable("pulseaudio", "Detect and use PulseAudio", False),
         BoolVariable("udev", "Use udev for gamepad connection callbacks", False),
         BoolVariable("debug_symbols", "Add debugging symbols to release/release_debug builds", True),
         BoolVariable("separate_debug_symbols", "Create a separate file containing debugging symbols", False),
@@ -243,14 +243,22 @@ def configure(env):
     # Sound and video libraries
     # Keep the order as it triggers chained dependencies (ogg needed by others, etc.)
 
-    if not env["builtin_libtheora"]:
-        env["builtin_libogg"] = False  # Needed to link against system libtheora
-        env["builtin_libvorbis"] = False  # Needed to link against system libtheora
-        env.ParseConfig("pkg-config theora theoradec --cflags --libs")
-    else:
-        list_of_x86 = ["x86_64", "x86", "i386", "i586"]
-        if any(platform.machine() in s for s in list_of_x86):
+    ## Dependencies
+
+    if env["builtin_libtheora"]:
+        if env["arch"] != "arm64":
             env["x86_libtheora_opt_gcc"] = True
+
+    ## Flags
+
+    # if not env["builtin_libtheora"]:
+    #     env["builtin_libogg"] = False  # Needed to link against system libtheora
+    #     env["builtin_libvorbis"] = False  # Needed to link against system libtheora
+    #     env.ParseConfig("pkg-config theora theoradec --cflags --libs")
+    # else:
+    #     list_of_x86 = ["x86_64", "x86", "i386", "i586"]
+    #     if any(platform.machine() in s for s in list_of_x86):
+    #         env["x86_libtheora_opt_gcc"] = True
 
     if not env["builtin_libvpx"]:
         env.ParseConfig("pkg-config vpx --cflags --libs")
