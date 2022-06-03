@@ -1,4 +1,5 @@
 #include "window_wayland.h"
+#include "render_surface_egl.h"
 #include "core/print_string.h"
 
 const wl_registry_listener WindowWayland::kWlRegistryListener = {
@@ -694,7 +695,8 @@ bool WindowWayland::create_render_surface(int width, int height) {
     xdg_toplevel_add_listener(xdg_toplevel_, &kXdgToplevelListener, this);
     wl_surface_commit(native_window_->surface());
 
-    context_egl = memnew(ContextEgl(native_window_));
+    render_surface_ = std::make_unique<RenderSurfaceEgl>();
+    render_surface_->set_native_window(native_window_);
 
   return true;
 
@@ -708,6 +710,8 @@ void WindowWayland::destroy_render_surface() {
     memdelete(native_window_);
     native_window_ = nullptr;
 
+    render_surface_ = nullptr;
+
     if (xdg_surface_) {
       xdg_surface_destroy(xdg_surface_);
       xdg_surface_ = nullptr;
@@ -719,8 +723,8 @@ void WindowWayland::destroy_render_surface() {
     // } 
 }
 
-RenderSurfaceTarget* WindowWayland::get_render_surface_target() const {
-  return nullptr;
+RenderSurface* WindowWayland::get_render_surface() const {
+  return render_surface_.get();
 }
 
 void WindowWayland::process_events() {
@@ -743,15 +747,7 @@ void WindowWayland::process_events() {
   
 }
 
-void WindowWayland::make_current() {
-  context_egl->make_current();
-}
+void WindowWayland::set_cursor(WaylandCursorShape p_shape) {
 
-void WindowWayland::release_current() {
-    context_egl->release_current();
-}
-
-void WindowWayland::swap_buffers() {
-    context_egl->swap_buffers();
 }
 

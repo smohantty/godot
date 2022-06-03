@@ -4,11 +4,12 @@
 #include <poll.h>
 #include <wayland-client.h>
 #include <wayland-cursor.h>
+#include <memory>
 
 #include "window_bindings.h"
 #include "xdg_shell.gen.h"
 #include "native_window_wayland.h"
-#include "context_egl.h"
+#include "render_surface_egl.h"
 #include "core/os/thread.h"
 
 struct WindowProperties {
@@ -19,19 +20,38 @@ struct WindowProperties {
     bool use_mouse_cursor{true};
 };
 
-class WindowWayland : public WindowBindingHandler {
+enum class WaylandCursorShape {
+    CURSOR_ARROW,
+    CURSOR_IBEAM,
+    CURSOR_POINTING_HAND,
+    CURSOR_CROSS,
+    CURSOR_WAIT,
+    CURSOR_BUSY,
+    CURSOR_DRAG,
+    CURSOR_CAN_DROP,
+    CURSOR_FORBIDDEN,
+    CURSOR_VSIZE,
+    CURSOR_HSIZE,
+    CURSOR_BDIAGSIZE,
+    CURSOR_FDIAGSIZE,
+    CURSOR_MOVE,
+    CURSOR_VSPLIT,
+    CURSOR_HSPLIT,
+    CURSOR_HELP,
+    CURSOR_UNKNOWN
+};
+
+class WindowWayland {
 public:
     WindowWayland(WindowProperties p_properties);
     ~WindowWayland();
-    virtual bool create_render_surface(int width, int height);
-    virtual void destroy_render_surface();
-    RenderSurfaceTarget* get_render_surface_target() const;
+    bool create_render_surface(int width, int height);
+    void destroy_render_surface();
+    RenderSurface* get_render_surface() const;
+
+    void set_cursor(WaylandCursorShape p_shape);
 
     void process_events();
-
-    void make_current();
-    void release_current();
-    void swap_buffers();
 
 private:
     struct CursorInfo {
@@ -54,9 +74,8 @@ private:
 
     static void _poll_events_thread(void *p_data);
 
-    NativeWindowWayland  *native_window_;
-    RenderSurfaceTarget  *render_surface_;
-    ContextEgl           *context_egl;
+    NativeWindowWayland               *native_window_;
+    std::unique_ptr<RenderSurfaceEgl>     render_surface_;
 
     Thread                events_thread_;
     WaylandEventPoll      wayland_event_poll_;        

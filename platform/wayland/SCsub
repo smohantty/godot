@@ -52,7 +52,7 @@ common_wayland = [
     "power_wayland.cpp",
     "window/window_wayland.cpp",
     "window/native_window_wayland.cpp",
-    "window/context_egl.cpp",
+    "window/render_surface_egl.cpp",
     "xdg_shell.gen.c",
     "dl/gles2.gen.cc", 
     "dl/gles3.gen.cc",

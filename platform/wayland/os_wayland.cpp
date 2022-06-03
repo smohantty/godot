@@ -189,15 +189,69 @@ bool OS_Wayland::can_draw() const {
 }
 
 void OS_Wayland::release_rendering_thread() {
-	wayland_window->release_current();
+	wayland_window->get_render_surface()->release_current();
 }
 
 void OS_Wayland::make_rendering_thread() {
-	wayland_window->make_current();
+	wayland_window->get_render_surface()->make_current();
 }
 
 void OS_Wayland::swap_buffers() {
-	wayland_window->swap_buffers();
+	wayland_window->get_render_surface()->swap_buffers();
+}
+
+static WaylandCursorShape _map_to_wayland_cursor(CursorShape p_shape) {
+	switch(p_shape) {
+		case OS::CURSOR_ARROW:
+			return WaylandCursorShape::CURSOR_ARROW;
+		case OS::CURSOR_IBEAM:
+			return WaylandCursorShape::CURSOR_IBEAM;
+		case OS::CURSOR_POINTING_HAND:
+			return WaylandCursorShape::CURSOR_POINTING_HAND;
+		case OS::CURSOR_CROSS:
+			return WaylandCursorShape::CURSOR_CROSS;
+		case OS::CURSOR_WAIT:
+			return WaylandCursorShape::CURSOR_WAIT;
+		case OS::CURSOR_BUSY:
+			return WaylandCursorShape::CURSOR_BUSY;
+		case OS::CURSOR_DRAG:
+			return WaylandCursorShape::CURSOR_DRAG;
+		case OS::CURSOR_CAN_DROP:
+			return WaylandCursorShape::CURSOR_CAN_DROP;
+		case OS::CURSOR_FORBIDDEN:
+			return WaylandCursorShape::CURSOR_FORBIDDEN;
+		case OS::CURSOR_VSIZE:
+			return WaylandCursorShape::CURSOR_VSIZE;
+		case OS::CURSOR_HSIZE:
+			return WaylandCursorShape::CURSOR_HSIZE;
+		case OS::CURSOR_BDIAGSIZE:
+			return WaylandCursorShape::CURSOR_BDIAGSIZE;
+		case OS::CURSOR_FDIAGSIZE:
+			return WaylandCursorShape::CURSOR_FDIAGSIZE;
+		case OS::CURSOR_MOVE:
+			return WaylandCursorShape::CURSOR_MOVE;
+		case OS::CURSOR_VSPLIT:
+			return WaylandCursorShape::CURSOR_VSPLIT;
+		case OS::CURSOR_HSPLIT:
+			return WaylandCursorShape::CURSOR_HSPLIT;
+		case OS::CURSOR_HELP:
+			return WaylandCursorShape::CURSOR_HELP;
+		default:
+			return WaylandCursorShape::CURSOR_UNKNOWN;
+	}
+}
+void OS_Wayland::set_cursor_shape(CursorShape p_shape) {
+	current_cursor = p_shape;
+
+	wayland_window->set_cursor(_map_to_wayland_cursor(p_shape));
+}
+
+CursorShape OS_Wayland::get_cursor_shape() const {
+	return current_cursor;
+}
+
+void OS_Wayland::set_custom_mouse_cursor(const RES &p_cursor, CursorShape p_shape, const Vector2 &p_hotspot) {
+	print_line("set_custom_mouse_cursor not implemented");
 }
 
 OS_Wayland::OS_Wayland() {

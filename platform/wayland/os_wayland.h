@@ -49,6 +49,8 @@
 
 #include "window/window_wayland.h"
 
+using CursorShape = OS::CursorShape;
+
 class OS_Wayland : public OS_Unix {
     CrashHandler crash_handler;
 
@@ -97,6 +99,8 @@ class OS_Wayland : public OS_Unix {
 	AudioDriverPulseAudio driver_pulseaudio;
 #endif
 
+	CursorShape current_cursor;
+
 protected:
 	virtual int get_current_video_driver() const;
 	virtual int get_video_driver_count() const;
@@ -130,6 +134,10 @@ protected:
 	virtual void release_rendering_thread();
 	virtual void make_rendering_thread();
 	virtual void swap_buffers();
+public:
+	void set_cursor_shape(CursorShape p_shape) override;
+	CursorShape get_cursor_shape() const override;
+	void set_custom_mouse_cursor(const RES &p_cursor, CursorShape p_shape, const Vector2 &p_hotspot) override;
 
 public:
     void run();

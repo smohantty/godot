@@ -4,13 +4,12 @@
 #include <cstdint>
 #include "core/os/input_event.h"
 
-class RenderSurfaceTarget;
-
-class WindowBindingHandler {
+class RenderSurface {
 public:
-    virtual bool create_render_surface(int width, int height) = 0;
-    virtual void destroy_render_surface() = 0;
-    virtual RenderSurfaceTarget* get_render_surface_target() const = 0;
+    virtual void  make_current() = 0;
+    virtual void  release_current() = 0;
+    virtual void  swap_buffers() = 0;
+    virtual void* gl_proc_resolver(const char* name) = 0;
 };
 
 class WindowBindingHandlerDelegate {
