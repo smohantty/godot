@@ -46,7 +46,6 @@ for libname in ['gles2', 'gles3']:
 	env.Depends('platform_config.h', 'dl/' + libname + '.gen.h')
 
 common_wayland = [
-    "context_gl_wayland.cpp",
     "crash_handler_wayland.cpp",
     "os_wayland.cpp",
     "power_wayland.cpp",
