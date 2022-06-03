@@ -645,11 +645,41 @@ void WindowWayland::wl_registry_add(wl_registry* wl_registry,
                 print_line("Failed to load cursor theme.");
                 return;
             }
-            // CreateSupportedWlCursorList();
+            create_wl_cursor_list();
         }
         return;
     }
 
+}
+
+void WindowWayland::create_wl_cursor_list() {
+    std::array<std::string, 17> wl_cursor_themes = {
+      "left_ptr",
+      "xterm",
+      "hand2",
+      "cross",
+      "watch",
+      "left_ptr_watch",
+      "fleur",
+      "dnd-move",
+      "crossed_circle",
+      "v_double_arrow",
+      "h_double_arrow",
+      "size_bdiag",
+      "size_fdiag",
+      "move",
+      "row_resize",
+      "col_resize",
+      "question_arrow"
+    };
+
+    for (const auto& theme : wl_cursor_themes) {
+      auto cursor = wl_cursor_theme_get_cursor(wl_cursor_theme_, theme.c_str());
+      if (!cursor) {
+        continue;
+      }
+      supported_wl_cursor_list_[theme] = cursor;
+    }
 }
 
 void WindowWayland::wl_registry_remove(wl_registry* wl_registry, uint32_t name) {
@@ -747,7 +777,51 @@ void WindowWayland::process_events() {
   
 }
 
-void WindowWayland::set_cursor(WaylandCursorShape p_shape) {
+void WindowWayland::set_cursor(const std::string& name) {
+    print_line(vformat("set cursor %s", name.c_str()));
+    if (!window_properties_.use_mouse_cursor) {
+        return;
+    }
 
+    if (cursor_info_.cursor_name == name) {
+        return;
+    }
+
+    cursor_info_.cursor_name = name;
+
+    if (name == "none") {
+        wl_pointer_set_cursor(cursor_info_.pointer, cursor_info_.serial,
+                              wl_cursor_surface_, 0, 0);
+        wl_surface_attach(wl_cursor_surface_, nullptr, 0, 0);
+        wl_surface_damage(wl_cursor_surface_, 0, 0, 0, 0);
+        wl_surface_commit(wl_cursor_surface_);
+        return;
+    }
+
+    auto cursor = get_wl_cursor(name);
+    if (!cursor) {
+      return;
+    }
+
+    auto image = cursor->images[0];
+    auto buffer = wl_cursor_image_get_buffer(image);
+    if (buffer) {
+        wl_pointer_set_cursor(cursor_info_.pointer, cursor_info_.serial,
+                              wl_cursor_surface_, image->hotspot_x,
+                              image->hotspot_y);
+        wl_surface_attach(wl_cursor_surface_, buffer, 0, 0);
+        wl_surface_damage(wl_cursor_surface_, 0, 0, image->width, image->height);
+        wl_surface_commit(wl_cursor_surface_);
+    }
 }
+
+
+wl_cursor* WindowWayland::get_wl_cursor(const std::string& name) {
+    if (!name.empty() && supported_wl_cursor_list_.find(name) !=
+                              supported_wl_cursor_list_.end()) {
+      return supported_wl_cursor_list_[name];
+    }
+    return nullptr;
+}
+
 

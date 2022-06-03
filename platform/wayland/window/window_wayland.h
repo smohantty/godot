@@ -5,6 +5,7 @@
 #include <wayland-client.h>
 #include <wayland-cursor.h>
 #include <memory>
+#include <unordered_map>
 
 #include "window_bindings.h"
 #include "xdg_shell.gen.h"
@@ -20,27 +21,6 @@ struct WindowProperties {
     bool use_mouse_cursor{true};
 };
 
-enum class WaylandCursorShape {
-    CURSOR_ARROW,
-    CURSOR_IBEAM,
-    CURSOR_POINTING_HAND,
-    CURSOR_CROSS,
-    CURSOR_WAIT,
-    CURSOR_BUSY,
-    CURSOR_DRAG,
-    CURSOR_CAN_DROP,
-    CURSOR_FORBIDDEN,
-    CURSOR_VSIZE,
-    CURSOR_HSIZE,
-    CURSOR_BDIAGSIZE,
-    CURSOR_FDIAGSIZE,
-    CURSOR_MOVE,
-    CURSOR_VSPLIT,
-    CURSOR_HSPLIT,
-    CURSOR_HELP,
-    CURSOR_UNKNOWN
-};
-
 class WindowWayland {
 public:
     WindowWayland(WindowProperties p_properties);
@@ -49,15 +29,15 @@ public:
     void destroy_render_surface();
     RenderSurface* get_render_surface() const;
 
-    void set_cursor(WaylandCursorShape p_shape);
+    void set_cursor(const std::string& name);
 
     void process_events();
 
 private:
     struct CursorInfo {
-        String cursor_name;
-        uint32_t serial;
-        wl_pointer* pointer;
+        std::string cursor_name;
+        uint32_t serial{0};
+        wl_pointer* pointer{nullptr};
     };
     
     struct WaylandEventPoll {
@@ -66,11 +46,15 @@ private:
         SafeFlag events_thread_done;
     };
 
+    std::unordered_map<std::string, wl_cursor*> supported_wl_cursor_list_;
+
     WindowBindingHandlerDelegate* binding_handler_delegate_{nullptr};
 
     void wl_registry_add(wl_registry* wl_registry, uint32_t name,
                          const char* interface, uint32_t version);
     void wl_registry_remove(wl_registry* wl_registry, uint32_t name);
+    void create_wl_cursor_list();
+    wl_cursor* get_wl_cursor(const std::string& name);
 
     static void _poll_events_thread(void *p_data);
 

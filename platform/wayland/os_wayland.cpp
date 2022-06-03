@@ -200,44 +200,44 @@ void OS_Wayland::swap_buffers() {
 	wayland_window->get_render_surface()->swap_buffers();
 }
 
-static WaylandCursorShape _map_to_wayland_cursor(CursorShape p_shape) {
+static std::string _map_to_wayland_cursor(CursorShape p_shape) {
 	switch(p_shape) {
 		case OS::CURSOR_ARROW:
-			return WaylandCursorShape::CURSOR_ARROW;
+			return "left_ptr";
 		case OS::CURSOR_IBEAM:
-			return WaylandCursorShape::CURSOR_IBEAM;
+			return "xterm";
 		case OS::CURSOR_POINTING_HAND:
-			return WaylandCursorShape::CURSOR_POINTING_HAND;
+			return "hand2";
 		case OS::CURSOR_CROSS:
-			return WaylandCursorShape::CURSOR_CROSS;
+			return "cross";
 		case OS::CURSOR_WAIT:
-			return WaylandCursorShape::CURSOR_WAIT;
+			return "watch";
 		case OS::CURSOR_BUSY:
-			return WaylandCursorShape::CURSOR_BUSY;
+			return "left_ptr_watch";
 		case OS::CURSOR_DRAG:
-			return WaylandCursorShape::CURSOR_DRAG;
+			return "fleur";
 		case OS::CURSOR_CAN_DROP:
-			return WaylandCursorShape::CURSOR_CAN_DROP;
+			return "dnd-move";
 		case OS::CURSOR_FORBIDDEN:
-			return WaylandCursorShape::CURSOR_FORBIDDEN;
+			return "crossed_circle";
 		case OS::CURSOR_VSIZE:
-			return WaylandCursorShape::CURSOR_VSIZE;
+			return "v_double_arrow";
 		case OS::CURSOR_HSIZE:
-			return WaylandCursorShape::CURSOR_HSIZE;
+			return"h_double_arrow";
 		case OS::CURSOR_BDIAGSIZE:
-			return WaylandCursorShape::CURSOR_BDIAGSIZE;
+			return "size_bdiag";
 		case OS::CURSOR_FDIAGSIZE:
-			return WaylandCursorShape::CURSOR_FDIAGSIZE;
+			return "size_fdiag";
 		case OS::CURSOR_MOVE:
-			return WaylandCursorShape::CURSOR_MOVE;
+			return "move";
 		case OS::CURSOR_VSPLIT:
-			return WaylandCursorShape::CURSOR_VSPLIT;
+			return "row_resize";
 		case OS::CURSOR_HSPLIT:
-			return WaylandCursorShape::CURSOR_HSPLIT;
+			return "col_resize";
 		case OS::CURSOR_HELP:
-			return WaylandCursorShape::CURSOR_HELP;
+			return "question_arrow";
 		default:
-			return WaylandCursorShape::CURSOR_UNKNOWN;
+			return "none";
 	}
 }
 void OS_Wayland::set_cursor_shape(CursorShape p_shape) {
