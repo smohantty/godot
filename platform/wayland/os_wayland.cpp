@@ -35,7 +35,7 @@
 //#include "detect_prime.h"
 
 #include "drivers/gles3/rasterizer_gles3.h"
-#define FRT_DL_SKIP
+#define WAYLAND_DL_SKIP
 #include "drivers/gles2/rasterizer_gles2.h"
 //#include "key_mapping_x11.h"
 #include "main/main.h"
@@ -112,12 +112,12 @@ Error OS_Wayland::initialize(const VideoMode &p_desired, int p_video_driver, int
 	};
 
 	if (p_video_driver == VIDEO_DRIVER_GLES3) {
-		frt_resolve_symbols_gles3(get_proc_address);
+		wayland_resolve_symbols_gles3(get_proc_address);
 		RasterizerGLES3::register_config();
 		RasterizerGLES3::make_current();
 		current_video_driver = VIDEO_DRIVER_GLES3;
 	} else {
-		frt_resolve_symbols_gles2(get_proc_address);
+		wayland_resolve_symbols_gles2(get_proc_address);
 		RasterizerGLES2::register_config();
 		RasterizerGLES2::make_current();
 		current_video_driver = VIDEO_DRIVER_GLES2;
