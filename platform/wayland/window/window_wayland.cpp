@@ -2,6 +2,9 @@
 #include "render_surface_egl.h"
 #include "core/print_string.h"
 
+#include <linux/input-event-codes.h>
+
+
 const wl_registry_listener WindowWayland::kWlRegistryListener = {
     .global =
         [](void* data,
@@ -299,84 +302,39 @@ const wl_pointer_listener WindowWayland::kWlPointerListener = {
       auto self = reinterpret_cast<WindowWayland*>(data);
       self->serial_ = serial;
 
-    //   if (button == BTN_LEFT && status == WL_POINTER_BUTTON_STATE_PRESSED) {
-    //     if (self->window_decorations_ &&
-    //         self->window_decorations_->IsMatched(
-    //             self->wl_current_surface_,
-    //             WindowDecoration::DecorationType::TITLE_BAR)) {
-    //       xdg_toplevel_move(self->xdg_toplevel_, self->wl_seat_, serial);
-    //       return;
-    //     }
+      if (button == BTN_LEFT && status == WL_POINTER_BUTTON_STATE_PRESSED) {
+          if (self->binding_handler_delegate_) {
+            ButtonList button_pressed = BUTTON_LEFT;
+            switch (button) {
+              case BTN_LEFT:
+                button_pressed = BUTTON_LEFT;
+                break;
+              case BTN_RIGHT:
+                button_pressed = BUTTON_RIGHT;
+                break;
+              case BTN_MIDDLE:
+                button_pressed = BUTTON_MIDDLE;
+                break;
+              case BTN_BACK:
+                button_pressed = BUTTON_LEFT;
+                break;
+              case BTN_FORWARD:
+                button_pressed = BUTTON_LEFT;
+                break;
+              default:
+                print_line("Not expected button input: ");
+                return;
+            }
 
-    //     if (self->window_decorations_ &&
-    //         self->window_decorations_->IsMatched(
-    //             self->wl_current_surface_,
-    //             WindowDecoration::DecorationType::CLOSE_BUTTON)) {
-    //       self->running_ = false;
-    //       return;
-    //     }
-
-    //     if (self->window_decorations_ &&
-    //         self->window_decorations_->IsMatched(
-    //             self->wl_current_surface_,
-    //             WindowDecoration::DecorationType::MAXIMISE_BUTTON)) {
-    //       if (self->maximised_) {
-    //         xdg_toplevel_unset_maximized(self->xdg_toplevel_);
-
-    //         // Requests to return to the original window size before maximizing.
-    //         self->restore_window_required_ = true;
-    //       } else {
-    //         // Stores original window size.
-    //         self->restore_window_width_ = self->view_properties_.width;
-    //         self->restore_window_height_ = self->view_properties_.height;
-    //         self->restore_window_required_ = false;
-
-    //         xdg_toplevel_set_maximized(self->xdg_toplevel_);
-    //       }
-    //       self->maximised_ = !self->maximised_;
-    //       return;
-    //     }
-
-    //     if (self->window_decorations_ &&
-    //         self->window_decorations_->IsMatched(
-    //             self->wl_current_surface_,
-    //             flutter::WindowDecoration::DecorationType::MINIMISE_BUTTON)) {
-    //       xdg_toplevel_set_minimized(self->xdg_toplevel_);
-    //       return;
-    //     }
-    //   }
-
-    //   if (self->binding_handler_delegate_) {
-    //     MouseButton button_pressed = MouseButton::NONE;
-    //     switch (button) {
-    //       case BTN_LEFT:
-    //         button_pressed = kFlutterPointerButtonMousePrimary;
-    //         break;
-    //       case BTN_RIGHT:
-    //         button_pressed = kFlutterPointerButtonMouseSecondary;
-    //         break;
-    //       case BTN_MIDDLE:
-    //         button_pressed = kFlutterPointerButtonMouseMiddle;
-    //         break;
-    //       case BTN_BACK:
-    //         button_pressed = kFlutterPointerButtonMouseBack;
-    //         break;
-    //       case BTN_FORWARD:
-    //         button_pressed = kFlutterPointerButtonMouseForward;
-    //         break;
-    //       default:
-    //         print_line("Not expected button input: ");
-    //         return;
-    //     }
-
-    //     if (status == WL_POINTER_BUTTON_STATE_PRESSED) {
-    //       self->binding_handler_delegate_->on_pointer_down(
-    //           self->pointer_x_, self->pointer_y_, button_pressed);
-    //     } else {
-    //       self->binding_handler_delegate_->on_pointer_up(
-    //           self->pointer_x_, self->pointer_y_, button_pressed);
-    //     }
-    //   }
+            if (status == WL_POINTER_BUTTON_STATE_PRESSED) {
+              self->binding_handler_delegate_->on_pointer_down(
+                  self->pointer_x_, self->pointer_y_, button_pressed);
+            } else {
+              self->binding_handler_delegate_->on_pointer_up(
+                  self->pointer_x_, self->pointer_y_, button_pressed);
+            }
+          }
+      }
     },
     .axis = [](void* data,
                wl_pointer* wl_pointer,
