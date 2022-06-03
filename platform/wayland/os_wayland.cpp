@@ -276,6 +276,7 @@ void OS_Wayland::run() {
  	main_loop->init();
 
 	while (!force_quit) {
+		//print_line("process event!");
 		wayland_window->process_events();
 // #ifdef JOYDEV_ENABLED
 // 		joypad->process_joypads();

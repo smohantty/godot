@@ -250,7 +250,6 @@ const wl_pointer_listener WindowWayland::kWlPointerListener = {
       auto self = reinterpret_cast<WindowWayland*>(data);
       self->wl_current_surface_ = surface;
       self->serial_ = serial;
-
       if (self->window_properties_.use_mouse_cursor) {
         self->cursor_info_.pointer = wl_pointer;
         self->cursor_info_.serial = serial;
@@ -271,7 +270,6 @@ const wl_pointer_listener WindowWayland::kWlPointerListener = {
       auto self = reinterpret_cast<WindowWayland*>(data);
       self->wl_current_surface_ = surface;
       self->serial_ = serial;
-
       if (self->binding_handler_delegate_) {
         self->binding_handler_delegate_->on_pointer_leave();
         self->pointer_x_ = -1;
@@ -518,17 +516,17 @@ WindowWayland::WindowWayland(WindowProperties p_properties) {
     running_ = true;
 
     wayland_event_poll_.display = wl_display_;
-    events_thread_.start(_poll_events_thread, &wayland_event_poll_);
+    //events_thread_.start(_poll_events_thread, &wayland_event_poll_);
 }
 
 WindowWayland::~WindowWayland() {
 
-    wayland_event_poll_.events_thread_done.set();
+    //wayland_event_poll_.events_thread_done.set();
 
     // Wait for any Wayland events to be handled and unblock the polling thread.
-    wl_display_roundtrip(wayland_event_poll_.display);
+    //wl_display_roundtrip(wayland_event_poll_.display);
 
-    events_thread_.wait_to_finish();
+    //events_thread_.wait_to_finish();
 
     display_valid_ = false;
     running_ = false;
@@ -707,6 +705,13 @@ bool WindowWayland::create_render_surface(int width, int height) {
       height = window_properties_.height;
     }
 
+    if (window_properties_.use_mouse_cursor) {
+        wl_cursor_surface_ = wl_compositor_create_surface(wl_compositor_);
+        if (!wl_cursor_surface_) {
+            print_line("Failed to create the compositor surface for cursor.");
+          return false;
+        }
+    }
     print_line(vformat("create wayland surface : %d X %d ",width, height));
 
     native_window_ = memnew(NativeWindowWayland(wl_display_, wl_compositor_, width, height));
@@ -728,6 +733,10 @@ bool WindowWayland::create_render_surface(int width, int height) {
     render_surface_ = std::make_unique<RenderSurfaceEgl>();
     render_surface_->set_native_window(native_window_);
 
+    //hack
+    wl_display_dispatch(wl_display_);
+    wl_display_roundtrip(wl_display_);
+
   return true;
 
 }
@@ -747,10 +756,10 @@ void WindowWayland::destroy_render_surface() {
       xdg_surface_ = nullptr;
     }
 
-    // if (wl_cursor_surface_) {
-    //   wl_surface_destroy(wl_cursor_surface_);
-    //   wl_cursor_surface_ = nullptr;
-    // } 
+    if (wl_cursor_surface_) {
+      wl_surface_destroy(wl_cursor_surface_);
+      wl_cursor_surface_ = nullptr;
+    } 
 }
 
 RenderSurface* WindowWayland::get_render_surface() const {
@@ -758,23 +767,32 @@ RenderSurface* WindowWayland::get_render_surface() const {
 }
 
 void WindowWayland::process_events() {
-    MutexLock mutex_lock(wayland_event_poll_.mutex);
 
-    int werror = wl_display_get_error(wl_display_);
-
-    if (werror) {
-      if (werror == EPROTO) {
-        struct wl_interface *wl_interface = nullptr;
-        uint32_t id = 0;
-
-        int error_code = wl_display_get_protocol_error(wl_display_, (const struct wl_interface **)&wl_interface, &id);
-        print_error(vformat("Wayland protocol error %d on interface %s@%d", error_code, wl_interface ? wl_interface->name : "unknown", id));
-      } else {
-        print_error(vformat("Wayland client error code %d", werror));
+    // Prepare to call wl_display_read_events.
+    while (wl_display_prepare_read(wl_display_) != 0) {
+      // If Wayland compositor terminates, -1 is returned.
+      auto result = wl_display_dispatch_pending(wl_display_);
+      if (result == -1) {
+        return;
       }
     }
-  // TODO process all the pending events.
-  
+    wl_display_flush(wl_display_);
+
+    // Handle Wayland events.
+    pollfd fds[] = {{wl_display_get_fd(wl_display_), POLLIN},};
+    if (poll(fds, 1, 0) > 0) {
+      auto result = wl_display_read_events(wl_display_);
+      if (result == -1) {
+        return;
+      }
+
+      result = wl_display_dispatch_pending(wl_display_);
+      if (result == -1) {
+        return;
+      }
+    } else {
+      wl_display_cancel_read(wl_display_);
+    }  
 }
 
 void WindowWayland::set_cursor(const std::string& name) {
