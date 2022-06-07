@@ -59,15 +59,15 @@ def copy_file(src_dir, dst_dir, src_name, dst_name=""):
 
 
 def is_desktop(platform):
-    return platform in ["windows", "osx", "x11", "server", "uwp", "haiku"]
+    return platform in ["windows", "osx", "x11", "server", "uwp", "haiku", "wayland"]
 
 
 def is_unix_like(platform):
-    return platform in ["osx", "x11", "server", "android", "haiku", "iphone"]
+    return platform in ["osx", "x11", "server", "android", "haiku", "iphone", "wayland"]
 
 
 def module_supports_tools_on(platform):
-    return platform not in ["android", "javascript", "iphone"]
+    return platform not in ["android", "javascript", "iphone", "wayland"]
 
 
 def find_wasm_src_dir(mono_root):
