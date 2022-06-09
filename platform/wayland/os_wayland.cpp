@@ -102,22 +102,14 @@ Error OS_Wayland::initialize(const VideoMode &p_desired, int p_video_driver, int
 	wayland_window = memnew(WindowWayland(props));
 
 	wayland_window->create_render_surface(current_videomode.width, current_videomode.height);
-	auto get_proc_address = [](const char* name ) -> void* {
-		auto address = eglGetProcAddress(name);
-		if (!address) {
-			print_line("Failed eglGetProcAddress: ");
-			return nullptr;
-		}
-		return reinterpret_cast<void*>(address);
-	};
 
 	if (p_video_driver == VIDEO_DRIVER_GLES3) {
-		wayland_resolve_symbols_gles3(get_proc_address);
+		wayland_resolve_symbols_gles3(wayland_window->get_render_surface()->gl_proc_resolver());
 		RasterizerGLES3::register_config();
 		RasterizerGLES3::make_current();
 		current_video_driver = VIDEO_DRIVER_GLES3;
 	} else {
-		wayland_resolve_symbols_gles2(get_proc_address);
+		wayland_resolve_symbols_gles2(wayland_window->get_render_surface()->gl_proc_resolver());
 		RasterizerGLES2::register_config();
 		RasterizerGLES2::make_current();
 		current_video_driver = VIDEO_DRIVER_GLES2;

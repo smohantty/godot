@@ -14,7 +14,7 @@ public:
     virtual void  make_current();
     virtual void  release_current();
     virtual void  swap_buffers();
-    virtual void* gl_proc_resolver(const char* name);
+    virtual glProcResolver gl_proc_resolver();
 private:
     class Impl;
     std::unique_ptr<RenderSurfaceEgl::Impl> pd;

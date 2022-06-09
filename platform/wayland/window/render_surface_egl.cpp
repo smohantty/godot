@@ -193,6 +193,14 @@ void RenderSurfaceEgl::swap_buffers() {
     pd->onscreen_surface_->swap_buffers();
 }
 
-void* RenderSurfaceEgl::gl_proc_resolver(const char* name) {
-    return pd->context_->gl_proc_resolver(name);
+static void* _proc_resolver(const char* name) {
+    auto address = eglGetProcAddress(name);
+    if (!address) {
+        return nullptr;
+    }
+    return reinterpret_cast<void*>(address);
+}
+
+glProcResolver RenderSurfaceEgl::gl_proc_resolver() {
+    return _proc_resolver;
 }

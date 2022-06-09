@@ -4,12 +4,13 @@
 #include <cstdint>
 #include "core/os/input_event.h"
 
+using glProcResolver = void* (*)(const char* name);
 class RenderSurface {
 public:
     virtual void  make_current() = 0;
     virtual void  release_current() = 0;
     virtual void  swap_buffers() = 0;
-    virtual void* gl_proc_resolver(const char* name) = 0;
+    virtual glProcResolver gl_proc_resolver() = 0;
 };
 
 class WindowBindingHandlerDelegate {
