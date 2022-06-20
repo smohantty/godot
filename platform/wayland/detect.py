@@ -346,21 +346,21 @@ def configure(env):
     if env["execinfo"]:
         env.Append(LIBS=["execinfo"])
 
-    if not env["tools"]:
-        import subprocess
-        import re
+    # if not env["tools"]:
+    #     import subprocess
+    #     import re
 
-        linker_version_str = subprocess.check_output([env.subst(env["LINK"]), "-Wl,--version"]).decode("utf-8")
-        gnu_ld_version = re.search("^GNU ld [^$]*(\d+\.\d+)$", linker_version_str, re.MULTILINE)
-        if not gnu_ld_version:
-            print(
-                "Warning: Creating template binaries enabled for PCK embedding is currently only supported with GNU ld, not gold or LLD."
-            )
-        else:
-            if float(gnu_ld_version.group(1)) >= 2.30:
-                env.Append(LINKFLAGS=["-T", "platform/wayland/pck_embed.ld"])
-            else:
-                env.Append(LINKFLAGS=["-T", "platform/wayland/pck_embed.legacy.ld"])
+    #     linker_version_str = subprocess.check_output([env.subst(env["LINK"]), "-Wl,--version"]).decode("utf-8")
+    #     gnu_ld_version = re.search("^GNU ld [^$]*(\d+\.\d+)$", linker_version_str, re.MULTILINE)
+    #     if not gnu_ld_version:
+    #         print(
+    #             "Warning: Creating template binaries enabled for PCK embedding is currently only supported with GNU ld, not gold or LLD."
+    #         )
+    #     else:
+    #         if float(gnu_ld_version.group(1)) >= 2.30:
+    #             env.Append(LINKFLAGS=["-T", "platform/wayland/pck_embed.ld"])
+    #         else:
+    #             env.Append(LINKFLAGS=["-T", "platform/wayland/pck_embed.legacy.ld"])
 
     ## Cross-compilation
 
