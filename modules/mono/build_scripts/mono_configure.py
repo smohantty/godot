@@ -67,7 +67,7 @@ def is_unix_like(platform):
 
 
 def module_supports_tools_on(platform):
-    return platform not in ["android", "javascript", "iphone", "wayland"]
+    return platform not in ["android", "javascript", "iphone"]
 
 
 def find_wasm_src_dir(mono_root):
