@@ -50,7 +50,7 @@
 #include "xdg_shell.gen.h"
 
 // FIXME: Since this platform is called linuxbsd, can we avoid this include?
-#include "linux/input-event-codes.h"
+//#include "linux/input-event-codes.h"
 
 #ifdef VULKAN_ENABLED
 #include "drivers/vulkan/rendering_device_vulkan.h"

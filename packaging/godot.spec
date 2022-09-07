@@ -7,6 +7,8 @@ Source:         %{name}-%{version}.tar.gz
 
 BuildRequires:  scons
 BuildRequires:  pkgconfig(python3)
+BuildRequires:  pkgconfig(wayland-client)
+BuildRequires:  pkgconfig(xkbcommon)
 
 %description
 godot core engine
@@ -15,7 +17,7 @@ godot core engine
 %setup -q
 
 %build
-scons -j 4 platform=linuxbsd x11=false wayland=true tools=false target=release_debug bits=32
+scons -j 4 platform=linuxbsd x11=false wayland=true tools=false target=release_debug
 
 %install
 rm -rf %{buildroot}
