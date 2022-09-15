@@ -62,6 +62,12 @@
 
 #undef CursorShape
 
+// Fix the wl_array_for_each macro to work with C++. This is based on the
+// original from `wayland-util.h` in the Wayland client library.
+#undef wl_array_for_each
+#define wl_array_for_each(pos, array) \
+	for (pos = (decltype(pos))(array)->data; (const char *)pos < ((const char *)(array)->data + (array)->size); (pos)++)
+
 class DisplayServerWayland : public DisplayServer {
 	// Wayland stuff.
 
@@ -149,6 +155,99 @@ class DisplayServerWayland : public DisplayServer {
 		int scale = 0;
 	};
 
+	struct PointerData {
+		Point2i position;
+		uint32_t motion_time = 0;
+
+		// Relative motion has its own optional event and so needs its own time.
+		Vector2 relative_motion;
+		uint32_t relative_motion_time = 0;
+
+		WindowID pointed_window_id = INVALID_WINDOW_ID;
+
+		MouseButton pressed_button_mask = MouseButton::NONE;
+
+		MouseButton last_button_pressed = MouseButton::NONE;
+		uint32_t button_time = 0;
+		uint32_t button_serial = 0;
+
+		Vector2 scroll_vector;
+	};
+
+	struct SeatState {
+		WaylandState *wls = nullptr;
+
+		struct wl_seat *wl_seat = nullptr;
+		uint32_t wl_seat_name = 0;
+
+		// Pointer.
+		struct wl_pointer *wl_pointer = nullptr;
+
+		//struct zwp_relative_pointer_v1 *wp_relative_pointer = nullptr;
+		//struct zwp_locked_pointer_v1 *wp_locked_pointer = nullptr;
+		//struct zwp_confined_pointer_v1 *wp_confined_pointer = nullptr;
+
+		struct wl_surface *cursor_surface = nullptr;
+
+		// This variable is needed to buffer all pointer changes until a
+		// wl_pointer.frame event, as per Wayland's specification. Everything is
+		// first set in `data_buffer` and then `data` is set with its contents on
+		// an input frame event. All methods should generally read from
+		// `pointer_data` and write to `data_buffer`.
+		PointerData pointer_data_buffer;
+		PointerData pointer_data;
+
+		// Keyboard.
+		//struct wl_keyboard *wl_keyboard = nullptr;
+
+		//struct xkb_context *xkb_context = nullptr;
+		//struct xkb_keymap *xkb_keymap = nullptr;
+		//struct xkb_state *xkb_state = nullptr;
+
+		//const char *keymap_buffer = nullptr;
+		//uint32_t keymap_buffer_size = 0;
+
+		//xkb_layout_index_t current_layout_index = 0;
+
+		WindowID keyboard_focused_window_id = INVALID_WINDOW_ID;
+
+		int32_t repeat_key_delay_msec = 0;
+		int32_t repeat_start_delay_msec = 0;
+
+		//xkb_keycode_t repeating_keycode = XKB_KEYCODE_INVALID;
+		uint64_t last_repeat_start_msec = 0;
+		uint64_t last_repeat_msec = 0;
+
+		bool shift_pressed = false;
+		bool ctrl_pressed = false;
+		bool alt_pressed = false;
+		bool meta_pressed = false;
+
+		uint32_t last_key_pressed_serial = 0;
+
+		//struct wl_data_device *wl_data_device = nullptr;
+
+		// Drag and drop.
+		//struct wl_data_offer *wl_data_offer_dnd = nullptr;
+		//uint32_t dnd_enter_serial = 0;
+
+		//WindowID dnd_current_window_id = INVALID_WINDOW_ID;
+
+		// Clipboard.
+		//struct wl_data_source *wl_data_source_selection = nullptr;
+		//struct wl_data_offer *wl_data_offer_selection = nullptr;
+
+		Vector<uint8_t> selection_data;
+
+		// Primary selection.
+		//struct zwp_primary_selection_device_v1 *wp_primary_selection_device = nullptr;
+
+		//struct zwp_primary_selection_source_v1 *wp_primary_selection_source = nullptr;
+		//struct zwp_primary_selection_offer_v1 *wp_primary_selection_offer = nullptr;
+
+		Vector<uint8_t> primary_data;
+	};
+
 	struct WaylandState {
 		Mutex mutex;
 
@@ -158,31 +257,19 @@ class DisplayServerWayland : public DisplayServer {
 		WaylandGlobals globals;
 
 		WindowID window_id_counter = MAIN_WINDOW_ID;
-		HashMap<WindowID, WindowData> windows;
+		RBMap<WindowID, WindowData> windows;
 
-		// NOTE: This variable is a `LocalVector` of `ScreenData` pointers because
-		// this list will:
-		//
-		// - Be Updated very rarely (only by screen hotplugs), so we can allow
-		//   ourselves for it to be more expensive to rebuild.
-		//
-		// - Be potentially read a lot and almost always in an indexed fashion (for
-		//   example any of the `screen_*` methods each frame from GDScript), so
-		//   having a quick read is relatively important.
-		//
-		// - Have to keep its pointers valid as the Wayland listeners require a
-		//   constant pointer for their data. That's why we need to manually manage
-		//   the data's memory and make this whole variable a `LocalVector` of
-		//   pointers.
-		//
-		// While this whole approach is probably the result of a bit too much
-		// premature optimization for an issue that I thought could be trivially
-		// solved, it's already there and it works, so I'm keeping it. Also, in the
-		// worst case, if this were to give problems or result in an uselessly
-		// convoluted approach, it should be relatively easy to switch back to a
-		// simpler (albeit, I think techcnically more wasteful but only in extreme
-		// circumstances) plain `List`.
-		LocalVector<ScreenData *> screens;
+		SeatState *current_seat = nullptr;
+
+		struct wl_cursor_theme *wl_cursor_theme = nullptr;
+		struct wl_cursor_image *cursor_images[CURSOR_MAX];
+		struct wl_buffer *cursor_bufs[CURSOR_MAX];
+
+		CursorShape cursor_shape = CURSOR_ARROW;
+		MouseMode mouse_mode = MOUSE_MODE_VISIBLE;
+
+		List<ScreenData> screens;
+		List<SeatState> seats;
 
 		List<WindowID> popup_menu_stack;
 
@@ -199,6 +286,13 @@ class DisplayServerWayland : public DisplayServer {
 	WaylandState wls;
 
 	Thread events_thread;
+	
+	static void _seat_state_override_cursor_shape(SeatState &p_ss, CursorShape p_shape);
+	static void _seat_state_set_current(SeatState &p_ss);
+	static void _wayland_state_update_cursor(WaylandState &p_wls);
+	static Point2i _wayland_state_point_window_to_global(const WaylandState &wls, WindowID p_window, Point2i p_position);
+
+	static void _get_key_modifier_state(SeatState &p_seat, Ref<InputEventWithModifiers> p_event);
 
 
 	WindowID _create_window(WindowMode p_mode, VSyncMode p_vsync_mode, uint32_t p_flags, const Rect2i &p_rect);
@@ -231,6 +325,19 @@ class DisplayServerWayland : public DisplayServer {
 
 	static void _zxdg_popup_v6_on_configure(void *data, struct zxdg_popup_v6 *zxdg_popup, int32_t x, int32_t y, int32_t width, int32_t height);
 	static void _zxdg_popup_v6_on_popup_done(void *data, struct zxdg_popup_v6 *zxdg_popup);
+
+	static void _wl_seat_on_capabilities(void *data, struct wl_seat *wl_seat, uint32_t capabilities);
+	static void _wl_seat_on_name(void *data, struct wl_seat *wl_seat, const char *name);
+
+	static void _wl_pointer_on_enter(void *data, struct wl_pointer *wl_pointer, uint32_t serial, struct wl_surface *surface, wl_fixed_t surface_x, wl_fixed_t surface_y);
+	static void _wl_pointer_on_leave(void *data, struct wl_pointer *wl_pointer, uint32_t serial, struct wl_surface *surface);
+	static void _wl_pointer_on_motion(void *data, struct wl_pointer *wl_pointer, uint32_t time, wl_fixed_t surface_x, wl_fixed_t surface_y);
+	static void _wl_pointer_on_button(void *data, struct wl_pointer *wl_pointer, uint32_t serial, uint32_t time, uint32_t button, uint32_t state);
+	static void _wl_pointer_on_axis(void *data, struct wl_pointer *wl_pointer, uint32_t time, uint32_t axis, wl_fixed_t value);
+	static void _wl_pointer_on_frame(void *data, struct wl_pointer *wl_pointer);
+	static void _wl_pointer_on_axis_source(void *data, struct wl_pointer *wl_pointer, uint32_t axis_source);
+	static void _wl_pointer_on_axis_stop(void *data, struct wl_pointer *wl_pointer, uint32_t time, uint32_t axis);
+	static void _wl_pointer_on_axis_discrete(void *data, struct wl_pointer *wl_pointer, uint32_t axis, int32_t discrete);
 
 	static constexpr struct wl_registry_listener wl_registry_listener = {
 		.global = _wl_registry_on_global,
@@ -267,6 +374,20 @@ class DisplayServerWayland : public DisplayServer {
 		.configure = _zxdg_popup_v6_on_configure,
 		.popup_done = _zxdg_popup_v6_on_popup_done,
 	};
+
+	static constexpr struct wl_seat_listener wl_seat_listener = {
+		.capabilities = _wl_seat_on_capabilities,
+		.name = _wl_seat_on_name,
+	};
+
+	static constexpr struct wl_pointer_listener wl_pointer_listener = {
+		.enter = _wl_pointer_on_enter,
+		.leave = _wl_pointer_on_leave,
+		.motion = _wl_pointer_on_motion,
+		.button = _wl_pointer_on_button,
+		.axis = _wl_pointer_on_axis,
+	};
+
 
 public:
 	virtual bool has_feature(Feature p_feature) const override;
