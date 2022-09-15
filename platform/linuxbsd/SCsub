@@ -45,15 +45,15 @@ if "wayland" in env and env["wayland"]:
     env.Append(BUILDERS=WAYLAND_BUILDERS)
 
     env.WAYLAND_API_HEADER(
-        target="xdg_shell.gen.h", source="#thirdparty/wayland-protocols/stable/xdg-shell/xdg-shell.xml"
+        target="xdg_shell_unstable_v6.gen.h", source="#thirdparty/wayland-protocols/unstable/xdg-shell/xdg-shell-unstable-v6.xml"
     )
 
     env.WAYLAND_API_CODE(
-        target="xdg_shell.gen.c", source="#thirdparty/wayland-protocols/stable/xdg-shell/xdg-shell.xml"
+        target="xdg_shell_unstable_v6.gen.c", source="#thirdparty/wayland-protocols/unstable/xdg-shell/xdg-shell-unstable-v6.xml"
     )
 
     common_linuxbsd += [
-        "xdg_shell.gen.c",
+        "xdg_shell_unstable_v6.gen.c",
         "display_server_wayland.cpp",
         "key_mapping_xkb.cpp",
     ]

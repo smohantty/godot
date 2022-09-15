@@ -201,19 +201,19 @@ void DisplayServerWayland::_delete_window(WindowID p_window) {
 	}
 #endif
 
-	if (wd.xdg_popup) {
-		xdg_popup_destroy(wd.xdg_popup);
-		wd.xdg_popup = nullptr;
+	if (wd.zxdg_popup) {
+		zxdg_popup_v6_destroy(wd.zxdg_popup);
+		wd.zxdg_popup = nullptr;
 	}
 
-	if (wd.xdg_toplevel) {
-		xdg_toplevel_destroy(wd.xdg_toplevel);
-		wd.xdg_toplevel = nullptr;
+	if (wd.zxdg_toplevel) {
+		zxdg_toplevel_v6_destroy(wd.zxdg_toplevel);
+		wd.zxdg_toplevel = nullptr;
 	}
 
-	if (wd.xdg_surface) {
-		xdg_surface_destroy(wd.xdg_surface);
-		wd.xdg_surface = nullptr;
+	if (wd.zxdg_surface) {
+		zxdg_surface_v6_destroy(wd.zxdg_surface);
+		wd.zxdg_surface = nullptr;
 	}
 
 	if (wd.wl_surface) {
@@ -252,9 +252,9 @@ void DisplayServerWayland::_wl_registry_on_global(void *data, struct wl_registry
 		return;
 	}
 
-	if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
-		globals.xdg_wm_base = (struct xdg_wm_base *)wl_registry_bind(wl_registry, name, &xdg_wm_base_interface, 1);
-		globals.xdg_wm_base_name = name;
+	if (strcmp(interface, zxdg_shell_v6_interface.name) == 0) {
+		globals.zxdg_shell = (struct zxdg_shell_v6 *)wl_registry_bind(wl_registry, name, &zxdg_shell_v6_interface, 1);
+		globals.zxdg_shell_name = name;		
 		return;
 	}
 }
@@ -276,9 +276,9 @@ void DisplayServerWayland::_wl_registry_on_global_remove(void *data, struct wl_r
 		return;
 	}
 
-	if (name == globals.xdg_wm_base_name) {
-		xdg_wm_base_destroy(globals.xdg_wm_base);
-		globals.xdg_wm_base = nullptr;
+	if (name == globals.zxdg_shell_name) {
+		zxdg_shell_v6_destroy(globals.zxdg_shell);
+		globals.zxdg_shell = nullptr;
 		return;
 	}
 
@@ -334,12 +334,12 @@ void DisplayServerWayland::_wl_output_on_scale(void *data, struct wl_output *wl_
 	sd->scale = factor;
 }
 
-void DisplayServerWayland::_xdg_wm_base_on_ping(void *data, struct xdg_wm_base *xdg_wm_base, uint32_t serial) {
-	xdg_wm_base_pong(xdg_wm_base, serial);
+void DisplayServerWayland::_zxdg_shell_v6_on_ping(void *data, struct zxdg_shell_v6 *shell, uint32_t serial) {
+	zxdg_shell_v6_pong(shell, serial);
 }
 
-void DisplayServerWayland::_xdg_surface_on_configure(void *data, struct xdg_surface *xdg_surface, uint32_t serial) {
-	xdg_surface_ack_configure(xdg_surface, serial);
+void DisplayServerWayland::_zxdg_surface_v6_on_configure(void *data, struct zxdg_surface_v6 *zxdg_surface, uint32_t serial) {
+	zxdg_surface_v6_ack_configure(zxdg_surface, serial);
 
 	WindowData *wd = (WindowData *)data;
 	ERR_FAIL_NULL(wd);
@@ -347,7 +347,7 @@ void DisplayServerWayland::_xdg_surface_on_configure(void *data, struct xdg_surf
 	WaylandState *wls = (WaylandState *)wd->wls;
 	ERR_FAIL_NULL(wls);
 
-	xdg_surface_set_window_geometry(wd->xdg_surface, 0, 0, wd->rect.size.width, wd->rect.size.height);
+	zxdg_surface_v6_set_window_geometry(wd->zxdg_surface, 0, 0, wd->rect.size.width, wd->rect.size.height);
 
 	Ref<WaylandWindowRectMessage> msg;
 	msg.instantiate();
@@ -356,7 +356,7 @@ void DisplayServerWayland::_xdg_surface_on_configure(void *data, struct xdg_surf
 	wls->message_queue.push_back(msg);
 }
 
-void DisplayServerWayland::_xdg_toplevel_on_configure(void *data, struct xdg_toplevel *xdg_toplevel, int32_t width, int32_t height, struct wl_array *states) {
+void DisplayServerWayland::_zxdg_toplevel_v6_on_configure(void *data, struct zxdg_toplevel_v6 *zxdg_toplevel, int32_t width, int32_t height, struct wl_array *states) {
 	WindowData *wd = (WindowData *)data;
 	ERR_FAIL_NULL(wd);
 
@@ -366,7 +366,7 @@ void DisplayServerWayland::_xdg_toplevel_on_configure(void *data, struct xdg_top
 	}
 }
 
-void DisplayServerWayland::_xdg_toplevel_on_close(void *data, struct xdg_toplevel *xdg_toplevel) {
+void DisplayServerWayland::_zxdg_toplevel_v6_on_close(void *data, struct zxdg_toplevel_v6 *zxdg_toplevel) {
 	WindowData *wd = (WindowData *)data;
 	ERR_FAIL_NULL(wd);
 
@@ -380,7 +380,7 @@ void DisplayServerWayland::_xdg_toplevel_on_close(void *data, struct xdg_topleve
 	wls->message_queue.push_back(msg);
 }
 
-void DisplayServerWayland::_xdg_popup_on_configure(void *data, struct xdg_popup *xdg_popup, int32_t x, int32_t y, int32_t width, int32_t height) {
+void DisplayServerWayland::_zxdg_popup_v6_on_configure(void *data, struct zxdg_popup_v6 *zxdg_popup, int32_t x, int32_t y, int32_t width, int32_t height) {
 	WindowData *wd = (WindowData *)data;
 	ERR_FAIL_NULL(wd);
 
@@ -393,7 +393,7 @@ void DisplayServerWayland::_xdg_popup_on_configure(void *data, struct xdg_popup 
 	print_verbose("xdg popup on configure");
 }
 
-void DisplayServerWayland::_xdg_popup_on_popup_done(void *data, struct xdg_popup *xdg_popup) {
+void DisplayServerWayland::_zxdg_popup_v6_on_popup_done(void *data, struct zxdg_popup_v6 *zxdg_popup) {
 	WindowData *wd = (WindowData *)data;
 	ERR_FAIL_NULL(wd);
 
@@ -408,11 +408,6 @@ void DisplayServerWayland::_xdg_popup_on_popup_done(void *data, struct xdg_popup
 
 	// DEBUG
 	print_verbose(vformat("Window %d xdg popup on popup done", wd->id));
-}
-
-void DisplayServerWayland::_xdg_popup_on_repositioned(void *data, struct xdg_popup *xdg_popup, uint32_t token) {
-	// DEBUG
-	print_verbose("xdg popup on repositioned");
 }
 
 // Interface mthods
@@ -595,8 +590,8 @@ void DisplayServerWayland::show_window(DisplayServer::WindowID p_id) {
 		wd.wl_surface = wl_compositor_create_surface(wls.globals.wl_compositor);
 		wl_surface_add_listener(wd.wl_surface, &wl_surface_listener, &wd);
 
-		wd.xdg_surface = xdg_wm_base_get_xdg_surface(wls.globals.xdg_wm_base, wd.wl_surface);
-		xdg_surface_add_listener(wd.xdg_surface, &xdg_surface_listener, &wd);
+		wd.zxdg_surface = zxdg_shell_v6_get_xdg_surface(wls.globals.zxdg_shell, wd.wl_surface);
+		zxdg_surface_v6_add_listener(wd.zxdg_surface, &zxdg_surface_listener, &wd);
 
 		if (window_get_flag(WINDOW_FLAG_BORDERLESS, p_id)) {
 			ERR_FAIL_COND_MSG(wd.parent == INVALID_WINDOW_ID, "Popups must have a parent.");
@@ -617,21 +612,21 @@ void DisplayServerWayland::show_window(DisplayServer::WindowID p_id) {
 
 			// xdg_positioner_destroy(xdg_positioner);
 		} else {
-			wd.xdg_toplevel = xdg_surface_get_toplevel(wd.xdg_surface);
-			xdg_toplevel_add_listener(wd.xdg_toplevel, &xdg_toplevel_listener, &wd);
+			wd.zxdg_toplevel = zxdg_surface_v6_get_toplevel(wd.zxdg_surface);
+			zxdg_toplevel_v6_add_listener(wd.zxdg_toplevel, &zxdg_toplevel_listener, &wd);
 
 			if (wd.parent != INVALID_WINDOW_ID) {
 				ERR_FAIL_COND(!wls.windows.has(wd.parent));
 
 				WindowData &parent_wd = wls.windows[wd.parent];
 
-				if (parent_wd.xdg_toplevel) {
-					xdg_toplevel_set_parent(wd.xdg_toplevel, parent_wd.xdg_toplevel);
+				if (parent_wd.zxdg_toplevel) {
+					zxdg_toplevel_v6_set_parent(wd.zxdg_toplevel, parent_wd.zxdg_toplevel);
 				}
 			}
 
 			if (wd.title.utf8().ptr()) {
-				xdg_toplevel_set_title(wd.xdg_toplevel, wd.title.utf8().ptr());
+				zxdg_toplevel_v6_set_title(wd.zxdg_toplevel, wd.title.utf8().ptr());
 			}
 		}
 
@@ -729,8 +724,8 @@ void DisplayServerWayland::window_set_title(const String &p_title, DisplayServer
 
 	wd.title = p_title;
 
-	if (wd.xdg_toplevel) {
-		xdg_toplevel_set_title(wd.xdg_toplevel, p_title.utf8().get_data());
+	if (wd.zxdg_toplevel) {
+		zxdg_toplevel_v6_set_title(wd.zxdg_toplevel, p_title.utf8().get_data());
 	}
 }
 
@@ -795,7 +790,7 @@ Point2i DisplayServerWayland::window_get_position(DisplayServer::WindowID p_wind
 
 	ERR_FAIL_COND_V(!wls.windows.has(p_window), Point2i());
 
-	if (wls.windows[p_window].xdg_toplevel) {
+	if (wls.windows[p_window].zxdg_toplevel) {
 		return Point2i();
 	} else {
 		return wls.windows[p_window].rect.position;
@@ -838,7 +833,7 @@ void DisplayServerWayland::window_set_transient(DisplayServer::WindowID p_window
 
 	ERR_FAIL_COND(wd.parent == p_parent);
 
-	struct xdg_toplevel *parent_toplevel = nullptr;
+	struct zxdg_toplevel_v6 *parent_toplevel = nullptr;
 
 	// Unset the window's parent if there's already one.
 	if (wd.parent != INVALID_WINDOW_ID) {
@@ -861,8 +856,8 @@ void DisplayServerWayland::window_set_transient(DisplayServer::WindowID p_window
 		ERR_FAIL_COND_MSG(!window_get_flag(WINDOW_FLAG_BORDERLESS, p_window) && window_get_flag(WINDOW_FLAG_BORDERLESS, p_parent), "Toplevels can't be parented to a popup.");
 	}
 
-	if (wd.xdg_toplevel) {
-		xdg_toplevel_set_parent(wd.xdg_toplevel, parent_toplevel);
+	if (wd.zxdg_toplevel) {
+		zxdg_toplevel_v6_set_parent(wd.zxdg_toplevel, parent_toplevel);
 	}
 }
 
@@ -885,8 +880,8 @@ void DisplayServerWayland::window_set_size(const Size2i p_size, DisplayServer::W
 
 	wd.rect.size = p_size;
 
-	if (wd.xdg_surface) {
-		xdg_surface_set_window_geometry(wd.xdg_surface, 0, 0, wd.rect.size.width, wd.rect.size.height);
+	if (wd.zxdg_surface) {
+		zxdg_surface_v6_set_window_geometry(wd.zxdg_surface, 0, 0, wd.rect.size.width, wd.rect.size.height);
 	}
 
 #ifdef VULKAN_ENABLED
@@ -1188,7 +1183,7 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 	// Wait for seat capabilities.
 	wl_display_roundtrip(wls.display);
 
-	xdg_wm_base_add_listener(wls.globals.xdg_wm_base, &xdg_wm_base_listener, nullptr);
+	zxdg_shell_v6_add_listener(wls.globals.zxdg_shell, &zxdg_shell_listener, nullptr);
 
 #if defined(VULKAN_ENABLED)
 	if (p_rendering_driver == "vulkan") {

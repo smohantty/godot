@@ -47,7 +47,7 @@
 #include "wayland-cursor.h"
 
 
-#include "xdg_shell.gen.h"
+#include "xdg_shell_unstable_v6.gen.h"
 
 // FIXME: Since this platform is called linuxbsd, can we avoid this include?
 //#include "linux/input-event-codes.h"
@@ -97,8 +97,8 @@ class DisplayServerWayland : public DisplayServer {
 		struct wl_compositor *wl_compositor = nullptr;
 		uint32_t wl_compositor_name = 0;
 
-		struct xdg_wm_base *xdg_wm_base = nullptr;
-		uint32_t xdg_wm_base_name = 0;
+		struct zxdg_shell_v6 *zxdg_shell = nullptr;
+		uint32_t zxdg_shell_name = 0;
 	};
 
 	struct WaylandState;
@@ -109,10 +109,10 @@ class DisplayServerWayland : public DisplayServer {
 		WaylandState *wls;
 
 		struct wl_surface *wl_surface = nullptr;
-		struct xdg_surface *xdg_surface = nullptr;
-		struct xdg_toplevel *xdg_toplevel = nullptr;
+		struct zxdg_surface_v6 *zxdg_surface = nullptr;
+		struct zxdg_toplevel_v6 *zxdg_toplevel = nullptr;
 
-		struct xdg_popup *xdg_popup = nullptr;
+		struct zxdg_popup_v6 *zxdg_popup = nullptr;
 
 		RBSet<WindowID> children;
 		WindowID parent = INVALID_WINDOW_ID;
@@ -222,16 +222,15 @@ class DisplayServerWayland : public DisplayServer {
 	static void _wl_output_on_done(void *data, struct wl_output *wl_output);
 	static void _wl_output_on_scale(void *data, struct wl_output *wl_output, int32_t factor);
 
-	// xdg-shell event handlers.
-	static void _xdg_wm_base_on_ping(void *data, struct xdg_wm_base *xdg_wm_base, uint32_t serial);
-	static void _xdg_surface_on_configure(void *data, struct xdg_surface *xdg_surface, uint32_t serial);
+	//zxdg_shell_v6 event handlers.
+	static void _zxdg_shell_v6_on_ping(void *data, struct zxdg_shell_v6 *zxdg_shell, uint32_t serial);
+	static void _zxdg_surface_v6_on_configure(void *data, struct zxdg_surface_v6 *zxdg_surface, uint32_t serial);
 
-	static void _xdg_toplevel_on_configure(void *data, struct xdg_toplevel *xdg_toplevel, int32_t width, int32_t height, struct wl_array *states);
-	static void _xdg_toplevel_on_close(void *data, struct xdg_toplevel *xdg_toplevel);
+	static void _zxdg_toplevel_v6_on_configure(void *data, struct zxdg_toplevel_v6 *zxdg_toplevel, int32_t width, int32_t height, struct wl_array *states);
+	static void _zxdg_toplevel_v6_on_close(void *data, struct zxdg_toplevel_v6 *zxdg_toplevel);
 
-	static void _xdg_popup_on_configure(void *data, struct xdg_popup *xdg_popup, int32_t x, int32_t y, int32_t width, int32_t height);
-	static void _xdg_popup_on_popup_done(void *data, struct xdg_popup *xdg_popup);
-	static void _xdg_popup_on_repositioned(void *data, struct xdg_popup *xdg_popup, uint32_t token);
+	static void _zxdg_popup_v6_on_configure(void *data, struct zxdg_popup_v6 *zxdg_popup, int32_t x, int32_t y, int32_t width, int32_t height);
+	static void _zxdg_popup_v6_on_popup_done(void *data, struct zxdg_popup_v6 *zxdg_popup);
 
 	static constexpr struct wl_registry_listener wl_registry_listener = {
 		.global = _wl_registry_on_global,
@@ -250,24 +249,23 @@ class DisplayServerWayland : public DisplayServer {
 		.scale = _wl_output_on_scale,
 	};
 
-	// xdg-shell event listeners.
-	static constexpr struct xdg_wm_base_listener xdg_wm_base_listener = {
-		.ping = _xdg_wm_base_on_ping,
+	// zxdg_shell_v6 event listeners.
+	static constexpr struct zxdg_shell_v6_listener zxdg_shell_listener = {
+	    .ping = _zxdg_shell_v6_on_ping,
 	};
 
-	static constexpr struct xdg_surface_listener xdg_surface_listener = {
-		.configure = _xdg_surface_on_configure,
+	static constexpr struct zxdg_surface_v6_listener zxdg_surface_listener = {
+		.configure = _zxdg_surface_v6_on_configure,
 	};
 
-	static constexpr struct xdg_toplevel_listener xdg_toplevel_listener = {
-		.configure = _xdg_toplevel_on_configure,
-		.close = _xdg_toplevel_on_close,
+	static constexpr struct zxdg_toplevel_v6_listener zxdg_toplevel_listener = {
+		.configure = _zxdg_toplevel_v6_on_configure,
+		.close = _zxdg_toplevel_v6_on_close,
 	};
 
-	static constexpr struct xdg_popup_listener xdg_popup_listener = {
-		.configure = _xdg_popup_on_configure,
-		.popup_done = _xdg_popup_on_popup_done,
-		.repositioned = _xdg_popup_on_repositioned,
+	static constexpr struct zxdg_popup_v6_listener zxdg_popup_listener = {
+		.configure = _zxdg_popup_v6_on_configure,
+		.popup_done = _zxdg_popup_v6_on_popup_done,
 	};
 
 public:
