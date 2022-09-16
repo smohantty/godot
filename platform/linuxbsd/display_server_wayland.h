@@ -119,12 +119,14 @@ class DisplayServerWayland : public DisplayServer {
 		struct zxdg_toplevel_v6 *zxdg_toplevel = nullptr;
 
 		struct zxdg_popup_v6 *zxdg_popup = nullptr;
+		struct zxdg_positioner_v6 *zxdg_positioner = nullptr;
 
 		RBSet<WindowID> children;
 		WindowID parent = INVALID_WINDOW_ID;
 
 		bool visible = false;
 
+		WindowMode mode;
 		uint32_t flags;
 		VSyncMode vsync_mode;
 		Rect2i rect;
@@ -296,6 +298,7 @@ class DisplayServerWayland : public DisplayServer {
 
 
 	WindowID _create_window(WindowMode p_mode, VSyncMode p_vsync_mode, uint32_t p_flags, const Rect2i &p_rect);
+	void _window_data_set_mode(WindowData &p_wd, WindowMode p_mode);
 	void _send_window_event(WindowID p_window, WindowEvent p_event);
 	void _delete_window(WindowID p_window);
 

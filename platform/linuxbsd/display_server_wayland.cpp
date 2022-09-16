@@ -303,6 +303,78 @@ DisplayServer::WindowID DisplayServerWayland::_create_window(WindowMode p_mode, 
 	return id;
 }
 
+// Method which forces the modesetting logic without any fancy no-op case
+// useful in internal Wayland window handling.
+void DisplayServerWayland::_window_data_set_mode(WindowData &p_wd, WindowMode p_mode) {
+	if (!p_wd.wl_surface || !p_wd.zxdg_toplevel) {
+		// TODO: Ask whether this is the right behaviour.
+
+		// Don't waste time with popups and whatnot. Behave like it worked.
+		p_wd.mode = p_mode;
+		return;
+	}
+
+	// Return back to a windowed state so that we can apply what the user asked.
+	switch (p_wd.mode) {
+		case WINDOW_MODE_WINDOWED: {
+			// Do nothing.
+		} break;
+
+		case WINDOW_MODE_MINIMIZED: {
+			// We can't do much according to the xdg_shell protocol. I have no idea
+			// whether this implies that we should return or who knows what. For now
+			// we'll do nothing.
+			// TODO: Test this properly.
+		} break;
+
+		case WINDOW_MODE_MAXIMIZED: {
+			// Try to unmaximize. This isn't garaunteed to work actually, so we'll have
+			// to check whether something changed.
+			zxdg_toplevel_v6_unset_maximized(p_wd.zxdg_toplevel);
+		} break;
+
+		case WINDOW_MODE_FULLSCREEN:
+		case WINDOW_MODE_EXCLUSIVE_FULLSCREEN: {
+			// Same thing as above, unset fullscreen and check later if it worked.
+			zxdg_toplevel_v6_unset_fullscreen(p_wd.zxdg_toplevel);
+		} break;
+	}
+
+	// Wait for a configure event and hope that something changed.
+	wl_display_roundtrip(wls.display);
+
+	if (p_wd.mode != WINDOW_MODE_WINDOWED) {
+		// The compositor refused our "normalization" request. It'd be useless or
+		// unpredictable to attempt setting a new state. We're done.
+		return;
+	}
+
+	// Ask the compositor to set the state indicated by the new mode.
+	switch (p_mode) {
+		case WINDOW_MODE_WINDOWED: {
+			// Do nothing. We're already windowed.
+		} break;
+
+		case WINDOW_MODE_MINIMIZED: {
+			zxdg_toplevel_v6_set_minimized(p_wd.zxdg_toplevel);
+
+			// We have no way to actually detect this state, so we'll have to report it
+			// manually to the engine (hoping that it worked). In the worst case it'll
+			// get reset by the next configure event.
+			p_wd.mode = WINDOW_MODE_MINIMIZED;
+		} break;
+
+		case WINDOW_MODE_MAXIMIZED: {
+			zxdg_toplevel_v6_set_maximized(p_wd.zxdg_toplevel);
+		} break;
+
+		case WINDOW_MODE_FULLSCREEN:
+		case WINDOW_MODE_EXCLUSIVE_FULLSCREEN: {
+			zxdg_toplevel_v6_set_fullscreen(p_wd.zxdg_toplevel, nullptr);
+		}
+	}
+}
+
 void DisplayServerWayland::_send_window_event(WindowID p_window, WindowEvent p_event) {
 	ERR_FAIL_COND(!wls.windows.has(p_window));
 	WindowData &wd = wls.windows[p_window];
@@ -1063,7 +1135,7 @@ Size2i DisplayServerWayland::screen_get_size(int p_screen) const {
 
 Rect2i DisplayServerWayland::screen_get_usable_rect(int p_screen) const {
 	// TODO
-	print_verbose("wayland stub screen_get_usable_rect");
+	DEBUG_LOG_WAYLAND(vformat("wayland stub screen_get_usable_rect screen %d, returning Rect2i(0, 0, 1920, 1080)", p_screen));
 	return Rect2i(0, 0, 1920, 1080);
 }
 
@@ -1153,23 +1225,25 @@ void DisplayServerWayland::show_window(DisplayServer::WindowID p_id) {
 		zxdg_surface_v6_add_listener(wd.zxdg_surface, &zxdg_surface_listener, &wd);
 
 		if (window_get_flag(WINDOW_FLAG_BORDERLESS, p_id)) {
-			ERR_FAIL_COND_MSG(wd.parent == INVALID_WINDOW_ID, "Popups must have a parent.");
+			ERR_FAIL_COND_MSG(!wls.windows.has(wd.parent), "Popups must have a valid parent.");
 
-			// WindowData &parent_wd = wls.windows[wd.parent];
+			WindowData &parent_wd = wls.windows[wd.parent];
 
-			// struct xdg_positioner *xdg_positioner = xdg_wm_base_create_positioner(wls.globals.xdg_wm_base);
-			// xdg_positioner_set_size(xdg_positioner, wd.rect.size.x, wd.rect.size.y);
-			// xdg_positioner_set_anchor(xdg_positioner, XDG_POSITIONER_ANCHOR_TOP_LEFT);
-			// xdg_positioner_set_gravity(xdg_positioner, XDG_POSITIONER_GRAVITY_BOTTOM_RIGHT);
-			// xdg_positioner_set_anchor_rect(xdg_positioner, 0, 0, parent_wd.rect.size.width, parent_wd.rect.size.height);
-			// xdg_positioner_set_offset(xdg_positioner, wd.rect.position.x - parent_wd.rect.position.x, wd.rect.position.y - parent_wd.rect.position.y);
+			wd.zxdg_positioner = zxdg_shell_v6_create_positioner(wls.globals.zxdg_shell);
+			zxdg_positioner_v6_set_size(wd.zxdg_positioner, wd.rect.size.width, wd.rect.size.height);
+			zxdg_positioner_v6_set_gravity(wd.zxdg_positioner, ZXDG_POSITIONER_V6_GRAVITY_BOTTOM);
+			zxdg_positioner_v6_set_anchor(wd.zxdg_positioner, ZXDG_POSITIONER_V6_ANCHOR_TOP);
+			zxdg_positioner_v6_set_anchor_rect(wd.zxdg_positioner, 0, 0, parent_wd.rect.size.width, parent_wd.rect.size.height);
 
-			// print_verbose(vformat("Created popup at %s", wd.rect.position));
+			zxdg_positioner_v6_set_offset(wd.zxdg_positioner, wd.rect.position.x - parent_wd.rect.position.x, wd.rect.position.y - parent_wd.rect.position.y);
+			DEBUG_LOG_WAYLAND(vformat("Parent offset: (%d, %d)", wd.rect.position.x - parent_wd.rect.position.x, wd.rect.position.y - parent_wd.rect.position.y));
 
-			// wd.xdg_popup = xdg_surface_get_popup(wd.xdg_surface, parent_wd.xdg_surface, xdg_positioner);
-			// xdg_popup_add_listener(wd.xdg_popup, &xdg_popup_listener, &wd);
+			zxdg_surface_v6_set_window_geometry(parent_wd.zxdg_surface, 0, 0, parent_wd.rect.size.width, parent_wd.rect.size.height);
 
-			// xdg_positioner_destroy(xdg_positioner);
+			wd.zxdg_popup = zxdg_surface_v6_get_popup(wd.zxdg_surface, parent_wd.zxdg_surface, wd.zxdg_positioner);
+			zxdg_popup_v6_add_listener(wd.zxdg_popup, &zxdg_popup_listener, &wd);
+
+			DEBUG_LOG_WAYLAND(vformat("Created popup at %s", wd.rect.position));
 		} else {
 			wd.zxdg_toplevel = zxdg_surface_v6_get_toplevel(wd.zxdg_surface);
 			zxdg_toplevel_v6_add_listener(wd.zxdg_toplevel, &zxdg_toplevel_listener, &wd);
@@ -1365,7 +1439,19 @@ void DisplayServerWayland::window_set_position(const Point2i &p_position, Displa
 	ERR_FAIL_COND(!wls.windows.has(p_window));
 	WindowData &wd = wls.windows[p_window];
 
-	wd.rect.position = p_position;
+	// NOTE: Setting the position of a non borderless windows (windows without an
+	// xdg_popup) is not supported.
+
+	if (wd.zxdg_popup) {
+		ERR_FAIL_COND(!wd.zxdg_positioner || !wls.windows.has(wd.parent));
+		WindowData &parent_wd = wls.windows[p_window];
+
+		zxdg_positioner_v6_set_offset(wd.zxdg_positioner, wd.rect.position.x - parent_wd.rect.position.x, wd.rect.position.y - parent_wd.rect.position.y);
+		//zxdg_popup_v6_reposition(wd.zxdg_popup, wd.zxdg_positioner, 0);
+
+		// Wait configure.
+		wl_display_roundtrip(wls.display);
+	}
 }
 
 void DisplayServerWayland::window_set_max_size(const Size2i p_size, DisplayServer::WindowID p_window) {
@@ -1473,14 +1559,25 @@ Size2i DisplayServerWayland::window_get_real_size(DisplayServer::WindowID p_wind
 }
 
 void DisplayServerWayland::window_set_mode(WindowMode p_mode, DisplayServer::WindowID p_window) {
-	// TODO
-	print_verbose("wayland stub window_set_mode");
+	MutexLock mutex_lock(wls.mutex);
+
+	ERR_FAIL_COND(!wls.windows.has(p_window));
+
+	WindowData &wd = wls.windows[p_window];
+
+	if (wd.mode == p_mode) {
+		return;
+	}
+
+	_window_data_set_mode(wd, p_mode);
 }
 
 DisplayServer::WindowMode DisplayServerWayland::window_get_mode(DisplayServer::WindowID p_window) const {
-	// TODO
-	print_verbose("wayland stub window_get_mode");
-	return WINDOW_MODE_WINDOWED;
+	MutexLock mutex_lock(wls.mutex);
+
+	ERR_FAIL_COND_V(!wls.windows.has(p_window), WINDOW_MODE_WINDOWED);
+
+	return wls.windows[p_window].mode;
 }
 
 bool DisplayServerWayland::window_is_maximize_allowed(DisplayServer::WindowID p_window) const {
