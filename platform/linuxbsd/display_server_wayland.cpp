@@ -283,6 +283,46 @@ void DisplayServerWayland::_get_key_modifier_state(SeatState &p_seat, Ref<InputE
 	p_event->set_meta_pressed(p_seat.meta_pressed);
 }
 
+// Sets up an `InputEventKey` and returns whether it has any meaningful value.
+bool DisplayServerWayland::_seat_state_configure_key_event(SeatState &p_ss, Ref<InputEventKey> p_event, xkb_keycode_t p_keycode, bool p_pressed) {
+	// TODO: Handle keys that release multiple symbols?
+	Key keycode = KeyMappingXKB::get_keycode(xkb_state_key_get_one_sym(p_ss.xkb_state, p_keycode));
+	Key physical_keycode = KeyMappingXKB::get_scancode(p_keycode);
+
+	if (physical_keycode == Key::NONE) {
+		return false;
+	}
+
+	if (keycode == Key::NONE) {
+		keycode = physical_keycode;
+	}
+
+	if (keycode >= Key::A + 32 && keycode <= Key::Z + 32) {
+		keycode -= 'a' - 'A';
+	}
+
+	if (p_ss.keyboard_focused_window_id != INVALID_WINDOW_ID) {
+		p_event->set_window_id(p_ss.keyboard_focused_window_id);
+	}
+
+	// Set all pressed modifiers.
+	_get_key_modifier_state(p_ss, p_event);
+
+	p_event->set_keycode(keycode);
+	p_event->set_physical_keycode(physical_keycode);
+	p_event->set_unicode(xkb_state_key_get_utf32(p_ss.xkb_state, p_keycode));
+	p_event->set_pressed(p_pressed);
+
+	// Taken from DisplayServerX11.
+	if (p_event->get_keycode() == Key::BACKTAB) {
+		// Make it consistent across platforms.
+		p_event->set_keycode(Key::TAB);
+		p_event->set_physical_keycode(Key::TAB);
+		p_event->set_shift_pressed(true);
+	}
+
+	return true;
+}
 
 DisplayServer::WindowID DisplayServerWayland::_create_window(WindowMode p_mode, VSyncMode p_vsync_mode, uint32_t p_flags, const Rect2i &p_rect) {
 	MutexLock mutex_lock(wls.mutex);
@@ -294,6 +334,7 @@ DisplayServer::WindowID DisplayServerWayland::_create_window(WindowMode p_mode, 
 	wd.id = id;
 	wd.wls = &wls;
 
+	wd.mode = p_mode;
 	wd.flags = p_flags;
 	wd.vsync_mode = p_vsync_mode;
 	wd.rect = p_rect;
@@ -721,23 +762,23 @@ void DisplayServerWayland::_wl_seat_on_capabilities(void *data, struct wl_seat *
 	}
 
 	// Keyboard handling.
-	// if (capabilities & WL_SEAT_CAPABILITY_KEYBOARD) {
-	// 	ss->xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-	// 	ERR_FAIL_NULL(ss->xkb_context);
+	if (capabilities & WL_SEAT_CAPABILITY_KEYBOARD) {
+		ss->xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+		ERR_FAIL_NULL(ss->xkb_context);
 
-	// 	ss->wl_keyboard = wl_seat_get_keyboard(wl_seat);
-	// 	wl_keyboard_add_listener(ss->wl_keyboard, &wl_keyboard_listener, ss);
-	// } else {
-	// 	if (ss->xkb_context) {
-	// 		xkb_context_unref(ss->xkb_context);
-	// 		ss->xkb_context = nullptr;
-	// 	}
+		ss->wl_keyboard = wl_seat_get_keyboard(wl_seat);
+		wl_keyboard_add_listener(ss->wl_keyboard, &wl_keyboard_listener, ss);
+	} else {
+		if (ss->xkb_context) {
+			xkb_context_unref(ss->xkb_context);
+			ss->xkb_context = nullptr;
+		}
 
-	// 	if (ss->wl_keyboard) {
-	// 		wl_keyboard_destroy(ss->wl_keyboard);
-	// 		ss->wl_keyboard = nullptr;
-	// 	}
-	// }
+		if (ss->wl_keyboard) {
+			wl_keyboard_destroy(ss->wl_keyboard);
+			ss->wl_keyboard = nullptr;
+		}
+	}
 }
 
 void DisplayServerWayland::_wl_seat_on_name(void *data, struct wl_seat *wl_seat, const char *name) {
@@ -1032,12 +1073,145 @@ void DisplayServerWayland::_wl_pointer_on_axis_stop(void *data, struct wl_pointe
 void DisplayServerWayland::_wl_pointer_on_axis_discrete(void *data, struct wl_pointer *wl_pointer, uint32_t axis, int32_t discrete) {
 }
 
+void DisplayServerWayland::_wl_keyboard_on_keymap(void *data, struct wl_keyboard *wl_keyboard, uint32_t format, int32_t fd, uint32_t size) {
+	ERR_FAIL_COND_MSG(format != WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1, "Unsupported keymap format announced from the Wayland compositor.");
 
+	SeatState *ss = (SeatState *)data;
+	ERR_FAIL_NULL(ss);
+
+	WaylandState *wls = ss->wls;
+	ERR_FAIL_NULL(wls);
+
+	if (ss->keymap_buffer) {
+		// We have already a mapped buffer, so we unmap it. There's no need to reset
+		// its pointer or size, as we're gonna set them below.
+		munmap((void *)ss->keymap_buffer, ss->keymap_buffer_size);
+		ss->keymap_buffer = nullptr;
+	}
+
+	ss->keymap_buffer = (const char *)mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
+	ss->keymap_buffer_size = size;
+
+	xkb_keymap_unref(ss->xkb_keymap);
+	ss->xkb_keymap = xkb_keymap_new_from_string(ss->xkb_context, ss->keymap_buffer,
+			XKB_KEYMAP_FORMAT_TEXT_V1, XKB_KEYMAP_COMPILE_NO_FLAGS);
+
+	xkb_state_unref(ss->xkb_state);
+	ss->xkb_state = xkb_state_new(ss->xkb_keymap);
+}
+
+void DisplayServerWayland::_wl_keyboard_on_enter(void *data, struct wl_keyboard *wl_keyboard, uint32_t serial, struct wl_surface *surface, struct wl_array *keys) {
+	SeatState *ss = (SeatState *)data;
+	ERR_FAIL_NULL(ss);
+
+	WaylandState *wls = ss->wls;
+	ERR_FAIL_NULL(wls);
+
+	_seat_state_set_current(*ss);
+
+	for (KeyValue<WindowID, WindowData> &E : wls->windows) {
+		WindowData &wd = E.value;
+
+		if (wd.wl_surface == surface) {
+			ss->keyboard_focused_window_id = E.key;
+			break;
+		}
+	}
+
+	Ref<WaylandWindowEventMessage> msg;
+	msg.instantiate();
+	msg->id = ss->keyboard_focused_window_id;
+	msg->event = WINDOW_EVENT_FOCUS_IN;
+	wls->message_queue.push_back(msg);
+}
+
+void DisplayServerWayland::_wl_keyboard_on_leave(void *data, struct wl_keyboard *wl_keyboard, uint32_t serial, struct wl_surface *surface) {
+	SeatState *ss = (SeatState *)data;
+	ERR_FAIL_NULL(ss);
+
+	WaylandState *wls = ss->wls;
+	ERR_FAIL_NULL(wls);
+
+	Ref<WaylandWindowEventMessage> msg;
+	msg.instantiate();
+
+	msg->id = ss->keyboard_focused_window_id;
+	msg->event = WINDOW_EVENT_FOCUS_OUT;
+
+	wls->message_queue.push_back(msg);
+
+	ss->keyboard_focused_window_id = INVALID_WINDOW_ID;
+	ss->repeating_keycode = XKB_KEYCODE_INVALID;
+}
+
+void DisplayServerWayland::_wl_keyboard_on_key(void *data, struct wl_keyboard *wl_keyboard, uint32_t serial, uint32_t time, uint32_t key, uint32_t state) {
+	SeatState *ss = (SeatState *)data;
+	ERR_FAIL_NULL(ss);
+
+	WaylandState *wls = ss->wls;
+	ERR_FAIL_NULL(wls);
+
+	_seat_state_set_current(*ss);
+
+	// We have to add 8 to the scancode to get an XKB-compatible keycode.
+	xkb_keycode_t xkb_keycode = key + 8;
+
+	bool pressed = state & WL_KEYBOARD_KEY_STATE_PRESSED;
+
+	if (pressed) {
+		if (xkb_keymap_key_repeats(ss->xkb_keymap, xkb_keycode)) {
+			ss->last_repeat_start_msec = OS::get_singleton()->get_ticks_msec();
+			ss->repeating_keycode = xkb_keycode;
+		}
+
+		ss->last_key_pressed_serial = serial;
+	} else if (ss->repeating_keycode == xkb_keycode) {
+		ss->repeating_keycode = XKB_KEYCODE_INVALID;
+	}
+
+	Ref<InputEventKey> k;
+	k.instantiate();
+
+	if (!_seat_state_configure_key_event(*ss, k, xkb_keycode, pressed)) {
+		return;
+	}
+
+	Ref<WaylandInputEventMessage> msg;
+	msg.instantiate();
+	msg->event = k;
+	wls->message_queue.push_back(msg);
+}
+
+void DisplayServerWayland::_wl_keyboard_on_modifiers(void *data, struct wl_keyboard *wl_keyboard, uint32_t serial, uint32_t mods_depressed, uint32_t mods_latched, uint32_t mods_locked, uint32_t group) {
+	SeatState *ss = (SeatState *)data;
+	ERR_FAIL_NULL(ss);
+
+	WaylandState *wls = ss->wls;
+	ERR_FAIL_NULL(wls);
+
+	_seat_state_set_current(*ss);
+
+	xkb_state_update_mask(ss->xkb_state, mods_depressed, mods_latched, mods_locked, ss->current_layout_index, ss->current_layout_index, group);
+
+	ss->shift_pressed = xkb_state_mod_name_is_active(ss->xkb_state, XKB_MOD_NAME_SHIFT, XKB_STATE_MODS_DEPRESSED);
+	ss->ctrl_pressed = xkb_state_mod_name_is_active(ss->xkb_state, XKB_MOD_NAME_CTRL, XKB_STATE_MODS_DEPRESSED);
+	ss->alt_pressed = xkb_state_mod_name_is_active(ss->xkb_state, XKB_MOD_NAME_ALT, XKB_STATE_MODS_DEPRESSED);
+	ss->meta_pressed = xkb_state_mod_name_is_active(ss->xkb_state, XKB_MOD_NAME_LOGO, XKB_STATE_MODS_DEPRESSED);
+}
+
+void DisplayServerWayland::_wl_keyboard_on_repeat_info(void *data, struct wl_keyboard *wl_keyboard, int32_t rate, int32_t delay) {
+	SeatState *ss = (SeatState *)data;
+	ERR_FAIL_NULL(ss);
+
+	ss->repeat_key_delay_msec = 1000 / rate;
+	ss->repeat_start_delay_msec = delay;
+}
 // Interface mthods
 
 bool DisplayServerWayland::has_feature(Feature p_feature) const {
 	switch (p_feature) {
 		case FEATURE_MOUSE:
+		case FEATURE_CURSOR_SHAPE:
 		case FEATURE_SUBWINDOWS:
 			return true;
 		default: {
@@ -1052,41 +1226,44 @@ String DisplayServerWayland::get_name() const {
 }
 
 void DisplayServerWayland::mouse_set_mode(MouseMode p_mode) {
+	if (p_mode == wls.mouse_mode) {
+		return;
+	}
 
+	MutexLock mutex_lock(wls.mutex);
+
+	wls.mouse_mode = p_mode;
+
+	_wayland_state_update_cursor(wls);
 }
 
 DisplayServerWayland::MouseMode DisplayServerWayland::mouse_get_mode() const {
-	return {};
+	return wls.mouse_mode;
 }
 
 void DisplayServerWayland::warp_mouse(const Point2i &p_to) {
 	// TODO
-	print_verbose("wayland stub warp_mouse");
+	DEBUG_LOG_WAYLAND(vformat("wayland stub warp_mouse to %s", p_to));
 }
 
 Point2i DisplayServerWayland::mouse_get_position() const {
 	MutexLock mutex_lock(wls.mutex);
 
-	Point2i position;
+	if (wls.current_seat) {
+		return _wayland_state_point_window_to_global(wls, wls.current_seat->pointer_data.pointed_window_id, wls.current_seat->pointer_data.position);
+	}
 
-	// if (wls.current_seat) {
-	// 	position = wls.current_seat->pointer_data.position;
-
-	// 	WindowID window_id = wls.current_seat->pointer_data.pointed_window_id;
-
-	// 	while (window_id != INVALID_WINDOW_ID) {
-	// 		ERR_FAIL_COND_V(!wls.windows.has(window_id), Point2i());
-	// 		position += wls.windows[window_id].rect.position;
-	// 		window_id = wls.windows[window_id].parent;
-	// 	}
-	// }
-
-	return position;
+	return Point2i();
 }
 
 MouseButton DisplayServerWayland::mouse_get_button_state() const {
-	return MouseButton::NONE;
+	MutexLock mutex_lock(wls.mutex);
 
+	if (!wls.current_seat) {
+		return MouseButton::NONE;
+	}
+
+	return wls.current_seat->pointer_data.pressed_button_mask;
 }
 
 void DisplayServerWayland::clipboard_set(const String &p_text) {
@@ -1179,7 +1356,7 @@ float DisplayServerWayland::screen_get_refresh_rate(int p_screen) const {
 
 bool DisplayServerWayland::screen_is_touchscreen(int p_screen) const {
 	// TODO
-	print_verbose("wayland stub screen_is_touchscreen");
+	DEBUG_LOG_WAYLAND(vformat("wayland stub screen_is_touchscreen screen %d, returning false", p_screen));
 	return false;
 }
 
@@ -1187,12 +1364,12 @@ bool DisplayServerWayland::screen_is_touchscreen(int p_screen) const {
 
 void DisplayServerWayland::screen_set_keep_on(bool p_enable) {
 	// TODO
-	print_verbose("wayland stub screen_set_keep_on");
+	DEBUG_LOG_WAYLAND(vformat("wayland stub screen_set_keep_on %s", p_enable ? "true" : "false"));
 }
 
 bool DisplayServerWayland::screen_is_kept_on() const {
 	// TODO
-	print_verbose("wayland stub screen_is_kept_on");
+	DEBUG_LOG_WAYLAND("wayland stub screen_is_kept_on, returning false");
 	return false;
 }
 
@@ -1200,7 +1377,7 @@ bool DisplayServerWayland::screen_is_kept_on() const {
 
 Vector<DisplayServer::WindowID> DisplayServerWayland::get_window_list() const {
 	// TODO
-	print_verbose("wayland stub get_window_list");
+	DEBUG_LOG_WAYLAND("wayland stub get_window_list, returning empty Vector<DisplayServer::WindowID>");
 
 	return Vector<DisplayServer::WindowID>();
 }
@@ -1216,7 +1393,7 @@ void DisplayServerWayland::show_window(DisplayServer::WindowID p_id) {
 	WindowData &wd = wls.windows[p_id];
 
 	if (!wd.visible) {
-		print_verbose(vformat("Showing window %d", p_id));
+		DEBUG_LOG_WAYLAND(vformat("Showing window %d", p_id));
 
 		wd.wl_surface = wl_compositor_create_surface(wls.globals.wl_compositor);
 		wl_surface_add_listener(wd.wl_surface, &wl_surface_listener, &wd);
@@ -1270,17 +1447,6 @@ void DisplayServerWayland::show_window(DisplayServer::WindowID p_id) {
 				wls.popup_menu_stack.clear();
 			}
 
-			// if (wls.current_seat) {
-			// 	// TODO: Investigate serial handling. Right now it only uses the last
-			// 	// button serial, but on sway it doesn't really matter.
-
-			// 	// Grab the popup. This blocks all new keyboard focus events.
-			// 	xdg_popup_grab(wd.xdg_popup, wls.current_seat->wl_seat, wls.current_seat->pointer_data.button_serial);
-
-			// 	// We must still focus the keyboard on the popup menu manually though.
-			// 	wls.current_seat->keyboard_focused_window_id = p_id;
-			// }
-
 			wls.popup_menu_stack.push_front(p_id);
 		}
 
@@ -1299,6 +1465,11 @@ void DisplayServerWayland::show_window(DisplayServer::WindowID p_id) {
 		}
 #endif
 		wd.visible = true;
+
+		if (wd.zxdg_toplevel) {
+			// Actually try to apply any mode the window has now that it's visible.
+			_window_data_set_mode(wd, wd.mode);
+		}
 	}
 }
 
@@ -1336,18 +1507,18 @@ Rect2i DisplayServerWayland::window_get_popup_safe_rect(WindowID p_window) const
 
 DisplayServer::WindowID DisplayServerWayland::get_window_at_screen_position(const Point2i &p_position) const {
 	// TODO
-	print_verbose("wayland stub get_window_at_screen_position");
+	DEBUG_LOG_WAYLAND(vformat("wayland stub get_window_at_screen_position position %s", p_position));
 	return WindowID(0);
 }
 
 void DisplayServerWayland::window_attach_instance_id(ObjectID p_instance, DisplayServer::WindowID p_window) {
 	// TODO
-	print_verbose("wayland stub window_attach_instance_id");
+	DEBUG_LOG_WAYLAND(vformat("wayland stub window_attach_instance_id instance %s window %d", p_instance, p_window));
 }
 
 ObjectID DisplayServerWayland::window_get_attached_instance_id(DisplayServer::WindowID p_window) const {
 	// TODO
-	print_verbose("wayland stub window_get_attached_instance_id");
+	DEBUG_LOG_WAYLAND(vformat("wayland stub window_get_attached_instance_id window %d, returning ObjectID()", p_window));
 	return ObjectID();
 }
 
@@ -1367,7 +1538,7 @@ void DisplayServerWayland::window_set_title(const String &p_title, DisplayServer
 
 void DisplayServerWayland::window_set_mouse_passthrough(const Vector<Vector2> &p_region, DisplayServer::WindowID p_window) {
 	// TODO
-	print_verbose("wayland stub window_set_mouse_passthrough");
+	DEBUG_LOG_WAYLAND(vformat("wayland stub window_set_mouse_passthrough region %s window %d", p_region, p_window));
 }
 
 void DisplayServerWayland::window_set_rect_changed_callback(const Callable &p_callable, DisplayServer::WindowID p_window) {
@@ -1399,7 +1570,7 @@ void DisplayServerWayland::window_set_input_event_callback(const Callable &p_cal
 
 void DisplayServerWayland::window_set_input_text_callback(const Callable &p_callable, DisplayServer::WindowID p_window) {
 	// TODO
-	print_verbose("wayland stub window_set_input_text_callback");
+	DEBUG_LOG_WAYLAND(vformat("wayland stub window_set_input_text_callback, callable %s window %d", p_callable, p_window));
 }
 
 void DisplayServerWayland::window_set_drop_files_callback(const Callable &p_callable, DisplayServer::WindowID p_window) {
@@ -1418,7 +1589,7 @@ int DisplayServerWayland::window_get_current_screen(DisplayServer::WindowID p_wi
 
 void DisplayServerWayland::window_set_current_screen(int p_screen, DisplayServer::WindowID p_window) {
 	// TODO
-	print_verbose("wayland stub window_set_current_screen");
+	DEBUG_LOG_WAYLAND(vformat("wayland stub window_set_current_screen screen %d window %d", p_screen, p_window));
 }
 
 Point2i DisplayServerWayland::window_get_position(DisplayServer::WindowID p_window) const {
@@ -1455,14 +1626,36 @@ void DisplayServerWayland::window_set_position(const Point2i &p_position, Displa
 }
 
 void DisplayServerWayland::window_set_max_size(const Size2i p_size, DisplayServer::WindowID p_window) {
-	// TODO
-	print_verbose("wayland stub window_set_max_size");
+	MutexLock mutex_lock(wls.mutex);
+
+	ERR_FAIL_COND(!wls.windows.has(p_window));
+
+	DEBUG_LOG_WAYLAND(vformat("window id %d max size set to %s", p_window, p_size));
+
+	if (p_size.x < 0 || p_size.y < 0) {
+		ERR_FAIL_MSG("Maximum window size can't be negative!");
+	}
+
+	WindowData &wd = wls.windows[p_window];
+	if ((p_size != Size2i()) && ((p_size.x < wd.min_size.x) || (p_size.y < wd.min_size.y))) {
+		ERR_PRINT("Maximum window size can't be smaller than minimum window size!");
+		return;
+	}
+
+	wd.max_size = p_size;
+
+	if (wd.wl_surface && wd.zxdg_toplevel) {
+		zxdg_toplevel_v6_set_max_size(wd.zxdg_toplevel, p_size.width, p_size.height);
+		wl_surface_commit(wd.wl_surface);
+	}
 }
 
 Size2i DisplayServerWayland::window_get_max_size(DisplayServer::WindowID p_window) const {
-	// TODO
-	print_verbose("wayland stub window_get_max_size");
-	return Size2i(1920, 1080);
+	MutexLock mutex_lock(wls.mutex);
+
+	ERR_FAIL_COND_V(!wls.windows.has(p_window), Size2i());
+
+	return wls.windows[p_window].max_size;
 }
 
 void DisplayServerWayland::gl_window_make_current(DisplayServer::WindowID p_window_id) {
@@ -1510,14 +1703,37 @@ void DisplayServerWayland::window_set_transient(DisplayServer::WindowID p_window
 }
 
 void DisplayServerWayland::window_set_min_size(const Size2i p_size, DisplayServer::WindowID p_window) {
-	// TODO
-	print_verbose("wayland stub window_set_min_size");
+	MutexLock mutex_lock(wls.mutex);
+
+	ERR_FAIL_COND(!wls.windows.has(p_window));
+
+	DEBUG_LOG_WAYLAND(vformat("window id %d minsize set to %s", p_window, p_size));
+
+	WindowData &wd = wls.windows[p_window];
+
+	if (p_size.x < 0 || p_size.y < 0) {
+		ERR_FAIL_MSG("Minimum window size can't be negative!");
+	}
+
+	if ((p_size != Size2i()) && (wd.max_size != Size2i()) && ((p_size.x > wd.max_size.x) || (p_size.y > wd.max_size.y))) {
+		ERR_PRINT("Minimum window size can't be larger than maximum window size!");
+		return;
+	}
+
+	wd.min_size = p_size;
+
+	if (wd.wl_surface && wd.zxdg_toplevel) {
+		zxdg_toplevel_v6_set_min_size(wd.zxdg_toplevel, p_size.width, p_size.height);
+		wl_surface_commit(wd.wl_surface);
+	}
 }
 
 Size2i DisplayServerWayland::window_get_min_size(DisplayServer::WindowID p_window) const {
-	// TODO
-	print_verbose("wayland stub window_get_min_size");
-	return Size2i(0, 0);
+	MutexLock mutex_lock(wls.mutex);
+
+	ERR_FAIL_COND_V(!wls.windows.has(p_window), Size2i());
+
+	return wls.windows[p_window].min_size;
 }
 
 void DisplayServerWayland::window_set_size(const Size2i p_size, DisplayServer::WindowID p_window) {
@@ -1582,7 +1798,7 @@ DisplayServer::WindowMode DisplayServerWayland::window_get_mode(DisplayServer::W
 
 bool DisplayServerWayland::window_is_maximize_allowed(DisplayServer::WindowID p_window) const {
 	// TODO
-	print_verbose("wayland stub window_is_maximize_allowed");
+	DEBUG_LOG_WAYLAND(vformat("wayland stub window_is_maximize_allowed window %d, returning false", p_window));
 	return false;
 }
 
@@ -1592,7 +1808,7 @@ void DisplayServerWayland::window_set_flag(WindowFlags p_flag, bool p_enabled, D
 	ERR_FAIL_COND(!wls.windows.has(p_window));
 	WindowData &wd = wls.windows[p_window];
 
-	print_verbose(vformat("Window %d set flag %d", p_window, p_flag));
+	DEBUG_LOG_WAYLAND(vformat("Window %d set flag %d", p_window, p_flag));
 
 	switch (p_flag) {
 		case WINDOW_FLAG_BORDERLESS: {
@@ -1620,12 +1836,12 @@ bool DisplayServerWayland::window_get_flag(WindowFlags p_flag, DisplayServer::Wi
 
 void DisplayServerWayland::window_request_attention(DisplayServer::WindowID p_window) {
 	// TODO
-	print_verbose("wayland stub window_request_attention");
+	DEBUG_LOG_WAYLAND(vformat("wayland stub window_request_attention window %d", p_window));
 }
 
 void DisplayServerWayland::window_move_to_foreground(DisplayServer::WindowID p_window) {
 	// TODO
-	print_verbose("wayland stub window_move_to_foreground");
+	DEBUG_LOG_WAYLAND(vformat("wayland stub window_move_to_foreground window %d", p_window));
 }
 
 bool DisplayServerWayland::window_can_draw(DisplayServer::WindowID p_window) const {
@@ -1640,18 +1856,18 @@ bool DisplayServerWayland::can_any_window_draw() const {
 
 void DisplayServerWayland::window_set_ime_active(const bool p_active, DisplayServer::WindowID p_window) {
 	// TODO
-	print_verbose("wayland stub window_set_ime_active");
+	DEBUG_LOG_WAYLAND(vformat("wayland stub window_set_ime_active active %s window %d", p_active ? "true" : "false", p_window));
 }
 
 void DisplayServerWayland::window_set_ime_position(const Point2i &p_pos, DisplayServer::WindowID p_window) {
 	// TODO
-	print_verbose("wayland stub window_set_ime_position");
+	DEBUG_LOG_WAYLAND(vformat("wayland stub window_set_ime_position pos %s window %d", p_pos, p_window));
 }
 
 void DisplayServerWayland::window_set_vsync_mode(DisplayServer::VSyncMode p_vsync_mode, DisplayServer::WindowID p_window) {
 	// TODO: Figure out whether it is possible to disable VSync with Wayland
 	// (doubt it) or handle any other mode.
-	print_verbose("wayland stub window_set_vsync_mode");
+	DEBUG_LOG_WAYLAND(vformat("wayland stub window_set_vsync_mode mode %d window %d", p_vsync_mode, p_window));
 }
 
 DisplayServer::VSyncMode DisplayServerWayland::window_get_vsync_mode(DisplayServer::WindowID p_vsync_mode) const {
@@ -1678,7 +1894,6 @@ DisplayServerWayland::CursorShape DisplayServerWayland::cursor_get_shape() const
 	MutexLock mutex_lock(wls.mutex);
 
 	return wls.cursor_shape;
-
 }
 
 void DisplayServerWayland::cursor_set_custom_image(const Ref<Resource> &p_cursor, CursorShape p_shape, const Vector2 &p_hotspot) {
@@ -1687,14 +1902,31 @@ void DisplayServerWayland::cursor_set_custom_image(const Ref<Resource> &p_cursor
 }
 
 int DisplayServerWayland::keyboard_get_layout_count() const {
+	MutexLock mutex_lock(wls.mutex);
+
+	if (wls.current_seat && wls.current_seat->xkb_keymap) {
+		return xkb_keymap_num_layouts(wls.current_seat->xkb_keymap);
+	}
+
 	return 0;
 }
 
 int DisplayServerWayland::keyboard_get_current_layout() const {
+	MutexLock mutex_lock(wls.mutex);
+
+	if (wls.current_seat) {
+		return wls.current_seat->current_layout_index;
+	}
+
 	return 0;
 }
 
 void DisplayServerWayland::keyboard_set_current_layout(int p_index) {
+	MutexLock mutex_lock(wls.mutex);
+
+	if (wls.current_seat) {
+		wls.current_seat->current_layout_index = p_index;
+	}
 }
 
 String DisplayServerWayland::keyboard_get_layout_language(int p_index) const {
@@ -1704,11 +1936,46 @@ String DisplayServerWayland::keyboard_get_layout_language(int p_index) const {
 }
 
 String DisplayServerWayland::keyboard_get_layout_name(int p_index) const {
-	return {};
+	MutexLock mutex_lock(wls.mutex);
+
+	String ret;
+
+	if (wls.current_seat && wls.current_seat->xkb_keymap) {
+		ret.parse_utf8(xkb_keymap_layout_get_name(wls.current_seat->xkb_keymap, p_index));
+	}
+
+	return ret;
 }
 
 Key DisplayServerWayland::keyboard_get_keycode_from_physical(Key p_keycode) const {
-	return  Key::NONE;
+	MutexLock mutex_lock(wls.mutex);
+
+	xkb_keycode_t xkb_keycode = KeyMappingXKB::get_xkb_keycode(p_keycode);
+
+	Key key = Key::NONE;
+
+	if (wls.current_seat && wls.current_seat->xkb_state) {
+		// NOTE: Be aware that this method will always return something, even if this
+		// line might never be executed if the current seat doesn't have a keyboard.
+		key = KeyMappingXKB::get_keycode(xkb_state_key_get_one_sym(wls.current_seat->xkb_state, xkb_keycode));
+	}
+
+	// If not found, fallback to QWERTY.
+	// This should match the behavior of the event pump.
+	if (key == Key::NONE) {
+		return p_keycode;
+	}
+
+	if (key >= Key::A + 32 && key <= Key::Z + 32) {
+		key -= 'a' - 'A';
+	}
+
+	// Make it consistent with the keys returned by `Input`.
+	if (key == Key::BACKTAB) {
+		key = Key::TAB;
+	}
+
+	return key;
 }
 
 void DisplayServerWayland::process_events() {
@@ -1792,17 +2059,17 @@ void DisplayServerWayland::swap_buffers() {
 
 void DisplayServerWayland::set_context(Context p_context) {
 	// TODO
-	print_verbose("wayland stub set_context");
+	DEBUG_LOG_WAYLAND(vformat("wayland stub set_context context %s", p_context));
 }
 
 void DisplayServerWayland::set_native_icon(const String &p_filename) {
 	// TODO
-	print_verbose("wayland stub set_native_icon");
+	DEBUG_LOG_WAYLAND(vformat("wayland stub set_native_icon filename %s", p_filename));
 }
 
 void DisplayServerWayland::set_icon(const Ref<Image> &p_icon) {
 	// TODO
-	print_verbose("wayland stub set_icon");
+	DEBUG_LOG_WAYLAND(vformat("wayland stub set_icon %s", p_icon));
 }
 
 Vector<String> DisplayServerWayland::get_rendering_drivers_func() {
@@ -1812,12 +2079,9 @@ Vector<String> DisplayServerWayland::get_rendering_drivers_func() {
 	drivers.push_back("vulkan");
 #endif
 
-	// TODO
-	/*
-	 * #ifdef GLES3_ENABLED
-	 * 	drivers.push_back("opengl3");
-	 * #endif
-	 */
+#ifdef GLES3_ENABLED
+	drivers.push_back("opengl3");
+#endif
 
 	return drivers;
 }
@@ -1825,29 +2089,34 @@ Vector<String> DisplayServerWayland::get_rendering_drivers_func() {
 DisplayServer *DisplayServerWayland::create_func(const String &p_rendering_driver, WindowMode p_mode, VSyncMode p_vsync_mode, uint32_t p_flags, const Vector2i &p_resolution, Error &r_error) {
 	DisplayServer *ds = memnew(DisplayServerWayland(p_rendering_driver, p_mode, p_vsync_mode, p_flags, p_resolution, r_error));
 	if (r_error != OK) {
-		OS::get_singleton()->alert("Your video card driver does not support any of the supported Vulkan or OpenGL versions.\n"
-								   "Please update your drivers or if you have a very old or integrated GPU, upgrade it.\n"
-								   "If you have updated your graphics drivers recently, try rebooting.",
-				"Unable to initialize Video driver");
+		ERR_PRINT("Can't create the Wayland display server.");
+
+		memdelete(ds);
 	}
 	return ds;
 }
 
 DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, WindowMode p_mode, VSyncMode p_vsync_mode, uint32_t p_flags, const Vector2i &p_resolution, Error &r_error) {
+	r_error = ERR_UNAVAILABLE;
+
 	wls.display = wl_display_connect(nullptr);
 
-	// TODO: Better error handling.
-	ERR_FAIL_NULL(wls.display);
+	ERR_FAIL_COND_MSG(!wls.display, "Can't connect to a Wayland display.");
 
 	wls.registry = wl_display_get_registry(wls.display);
 
-	// TODO: Better error handling.
-	ERR_FAIL_NULL(wls.display);
+	ERR_FAIL_COND_MSG(!wls.registry, "Can't obtain the Wayland registry global.");
 
 	wl_registry_add_listener(wls.registry, &wl_registry_listener, &wls);
 
 	// Wait for globals to get notified from the compositor.
 	wl_display_roundtrip(wls.display);
+
+	// TODO: Perhaps gracefully handle missing protocols when possible?
+	ERR_FAIL_COND_MSG(!wls.globals.wl_shm, "Can't obtain the Wayland shared memory global.");
+	ERR_FAIL_COND_MSG(!wls.globals.wl_compositor, "Can't obtain the Wayland compositor global.");
+	ERR_FAIL_COND_MSG(!wls.globals.zxdg_shell, "Can't obtain the Wayland ZXDG shell V6 global.");
+
 
 	// Input.
 	Input::get_singleton()->set_event_dispatch_function(dispatch_input_events);
@@ -1945,11 +2214,11 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Win
 
 		RendererCompositorRD::make_current();
 	}
-
-	r_error = OK;
 #endif
 
 	events_thread.start(_poll_events_thread, &wls);
+
+	r_error = OK;
 }
 
 DisplayServerWayland::~DisplayServerWayland() {
@@ -1973,19 +2242,40 @@ DisplayServerWayland::~DisplayServerWayland() {
 		}
 	}
 
-	wl_display_disconnect(wls.display);
+	if (wls.wl_cursor_theme) {
+		wl_cursor_theme_destroy(wls.wl_cursor_theme);
+	}
+
+
+	if (wls.globals.zxdg_shell) {
+		zxdg_shell_v6_destroy(wls.globals.zxdg_shell);
+	}
+
+	if (wls.globals.wl_shm) {
+		wl_shm_destroy(wls.globals.wl_shm);
+	}
+
+	if (wls.globals.wl_compositor) {
+		wl_compositor_destroy(wls.globals.wl_compositor);
+	}
+
+	if (wls.registry) {
+		wl_registry_destroy(wls.registry);
+	}
+
+	if (wls.display) {
+		wl_display_disconnect(wls.display);
+	}
 
 	// Destroy all drivers.
 #ifdef VULKAN_ENABLED
 	if (wls.rendering_device_vulkan) {
 		wls.rendering_device_vulkan->finalize();
 		memdelete(wls.rendering_device_vulkan);
-		wls.rendering_device_vulkan = nullptr;
 	}
 
 	if (wls.context_vulkan) {
 		memdelete(wls.context_vulkan);
-		wls.context_vulkan = nullptr;
 	}
 #endif
 }

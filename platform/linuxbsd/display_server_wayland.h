@@ -131,6 +131,8 @@ class DisplayServerWayland : public DisplayServer {
 		VSyncMode vsync_mode;
 		Rect2i rect;
 		Rect2i safe_rect;
+		Size2i max_size;
+		Size2i min_size;
 
 		Callable rect_changed_callback;
 		Callable window_event_callback;
@@ -200,23 +202,23 @@ class DisplayServerWayland : public DisplayServer {
 		PointerData pointer_data;
 
 		// Keyboard.
-		//struct wl_keyboard *wl_keyboard = nullptr;
+		struct wl_keyboard *wl_keyboard = nullptr;
 
-		//struct xkb_context *xkb_context = nullptr;
-		//struct xkb_keymap *xkb_keymap = nullptr;
-		//struct xkb_state *xkb_state = nullptr;
+		struct xkb_context *xkb_context = nullptr;
+		struct xkb_keymap *xkb_keymap = nullptr;
+		struct xkb_state *xkb_state = nullptr;
 
-		//const char *keymap_buffer = nullptr;
-		//uint32_t keymap_buffer_size = 0;
+		const char *keymap_buffer = nullptr;
+		uint32_t keymap_buffer_size = 0;
 
-		//xkb_layout_index_t current_layout_index = 0;
+		xkb_layout_index_t current_layout_index = 0;
 
 		WindowID keyboard_focused_window_id = INVALID_WINDOW_ID;
 
 		int32_t repeat_key_delay_msec = 0;
 		int32_t repeat_start_delay_msec = 0;
 
-		//xkb_keycode_t repeating_keycode = XKB_KEYCODE_INVALID;
+		xkb_keycode_t repeating_keycode = XKB_KEYCODE_INVALID;
 		uint64_t last_repeat_start_msec = 0;
 		uint64_t last_repeat_msec = 0;
 
@@ -296,6 +298,7 @@ class DisplayServerWayland : public DisplayServer {
 
 	static void _get_key_modifier_state(SeatState &p_seat, Ref<InputEventWithModifiers> p_event);
 
+	static bool _seat_state_configure_key_event(SeatState &p_seat, Ref<InputEventKey> p_event, xkb_keycode_t p_keycode, bool p_pressed);
 
 	WindowID _create_window(WindowMode p_mode, VSyncMode p_vsync_mode, uint32_t p_flags, const Rect2i &p_rect);
 	void _window_data_set_mode(WindowData &p_wd, WindowMode p_mode);
@@ -341,6 +344,13 @@ class DisplayServerWayland : public DisplayServer {
 	static void _wl_pointer_on_axis_source(void *data, struct wl_pointer *wl_pointer, uint32_t axis_source);
 	static void _wl_pointer_on_axis_stop(void *data, struct wl_pointer *wl_pointer, uint32_t time, uint32_t axis);
 	static void _wl_pointer_on_axis_discrete(void *data, struct wl_pointer *wl_pointer, uint32_t axis, int32_t discrete);
+	
+	static void _wl_keyboard_on_keymap(void *data, struct wl_keyboard *wl_keyboard, uint32_t format, int32_t fd, uint32_t size);
+	static void _wl_keyboard_on_enter(void *data, struct wl_keyboard *wl_keyboard, uint32_t serial, struct wl_surface *surface, struct wl_array *keys);
+	static void _wl_keyboard_on_leave(void *data, struct wl_keyboard *wl_keyboard, uint32_t serial, struct wl_surface *surface);
+	static void _wl_keyboard_on_key(void *data, struct wl_keyboard *wl_keyboard, uint32_t serial, uint32_t time, uint32_t key, uint32_t state);
+	static void _wl_keyboard_on_modifiers(void *data, struct wl_keyboard *wl_keyboard, uint32_t serial, uint32_t mods_depressed, uint32_t mods_latched, uint32_t mods_locked, uint32_t group);
+	static void _wl_keyboard_on_repeat_info(void *data, struct wl_keyboard *wl_keyboard, int32_t rate, int32_t delay);
 
 	static constexpr struct wl_registry_listener wl_registry_listener = {
 		.global = _wl_registry_on_global,
@@ -391,6 +401,14 @@ class DisplayServerWayland : public DisplayServer {
 		.axis = _wl_pointer_on_axis,
 	};
 
+	static constexpr struct wl_keyboard_listener wl_keyboard_listener = {
+		.keymap = _wl_keyboard_on_keymap,
+		.enter = _wl_keyboard_on_enter,
+		.leave = _wl_keyboard_on_leave,
+		.key = _wl_keyboard_on_key,
+		.modifiers = _wl_keyboard_on_modifiers,
+		.repeat_info = _wl_keyboard_on_repeat_info,
+	};
 
 public:
 	virtual bool has_feature(Feature p_feature) const override;
