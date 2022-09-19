@@ -17,9 +17,95 @@ def can_build():
     if os.name != "posix" or sys.platform == "darwin":
         return False
 
-    pkgconf_error = os.system("pkg-config --version > /dev/null")
-    if pkgconf_error:
+    # Check the minimal dependencies
+    x11_error = os.system("pkg-config --version > /dev/null")
+    if x11_error:
         print("Error: pkg-config not found. Aborting.")
+        return False
+
+    # TODO: Make X11 and Wayland coesist peacefully.
+    #    if env["x11"]:
+    #        return check_x11_dependencies()
+    #
+    #    if env["wayland"]:
+    #        return check_wayland_dependencies()
+    #
+    return True
+
+
+def check_x11_dependencies():
+    x11_error = os.system("pkg-config x11 --modversion > /dev/null")
+    if x11_error:
+        print("Error: X11 libraries not found. Aborting.")
+        return False
+
+    x11_error = os.system("pkg-config xcursor --modversion > /dev/null")
+    if x11_error:
+        print("Error: Xcursor library not found. Aborting.")
+        return False
+
+    x11_error = os.system("pkg-config xinerama --modversion > /dev/null")
+    if x11_error:
+        print("Error: Xinerama library not found. Aborting.")
+        return False
+
+    x11_error = os.system("pkg-config xext --modversion > /dev/null")
+    if x11_error:
+        print("Error: Xext library not found. Aborting.")
+        return False
+
+    x11_error = os.system("pkg-config xrandr --modversion > /dev/null")
+    if x11_error:
+        print("Error: XrandR library not found. Aborting.")
+        return False
+
+    x11_error = os.system("pkg-config xrender --modversion > /dev/null")
+    if x11_error:
+        print("Error: XRender library not found. Aborting.")
+        return False
+
+    x11_error = os.system("pkg-config xi --modversion > /dev/null")
+    if x11_error:
+        print("Error: Xi library not found. Aborting.")
+        return False
+
+    return True
+
+
+def check_wayland_dependencies():
+    wayland_error = os.system("pkg-config wayland-client --modversion > /dev/null")
+    if wayland_error:
+        print("Error: wayland-client library not found. Aborting.")
+        return False
+
+    wayland_error = os.system("pkg-config wayland-cursor --modversion > /dev/null")
+    if wayland_error:
+        print("Error: wayland-cursor library not found. Aborting.")
+        return False
+
+    wayland_error = os.system("pkg-config wayland-scanner --modversion > /dev/null")
+    if wayland_error:
+        print("Error: wayland-scanner not found. Aborting.")
+        return False
+
+    # We need at least version 1.20
+    min_wayland_client_version = "1.20"
+
+    import subprocess
+
+    wayland_client_version = subprocess.check_output(["pkg-config", "wayland-client", "--modversion"]).decode("utf-8")
+    if wayland_client_version < min_wayland_client_version:
+        # Abort as system wayland-client was requested but too old
+        print(
+            "wayland-client: System version {0} does not match minimal requirements ({1}). Aborting.".format(
+                wayland_client_version, min_wayland_client_version
+            )
+        )
+        return False
+
+    wayland_error = os.system("pkg-config xkbcommon --modversion > /dev/null")
+    if wayland_error:
+        print("Error: xkbcommon library not found. Aborting.")
         return False
 
     return True
@@ -44,6 +130,7 @@ def get_opts():
         BoolVariable("fontconfig", "Detect and use fontconfig for system fonts support", True),
         BoolVariable("udev", "Use udev for gamepad connection callbacks", True),
         BoolVariable("x11", "Enable X11 display", True),
+        BoolVariable("wayland", "Enable Wayland display", True),
         BoolVariable("debug_symbols", "Add debugging symbols to release/release_debug builds", True),
         BoolVariable("separate_debug_symbols", "Create a separate file containing debugging symbols", False),
         BoolVariable("touch", "Enable touch events", True),
@@ -202,6 +289,11 @@ def configure(env):
         env.ParseConfig("pkg-config xrender --cflags --libs")
         env.ParseConfig("pkg-config xi --cflags --libs")
 
+    if env["wayland"]:
+        env.ParseConfig("pkg-config wayland-client --cflags --libs")
+        env.ParseConfig("pkg-config wayland-cursor --cflags --libs")
+        env.ParseConfig("pkg-config xkbcommon --cflags --libs")
+
     if env["touch"]:
         env.Append(CPPDEFINES=["TOUCH_ENABLED"])
 
@@ -249,13 +341,13 @@ def configure(env):
     # Sound and video libraries
     # Keep the order as it triggers chained dependencies (ogg needed by others, etc.)
 
-    if not env["builtin_libtheora"]:
-        env["builtin_libogg"] = False  # Needed to link against system libtheora
-        env["builtin_libvorbis"] = False  # Needed to link against system libtheora
-        env.ParseConfig("pkg-config theora theoradec --cflags --libs")
-    else:
-        if env["arch"] in ["x86_64", "x86_32"]:
-            env["x86_libtheora_opt_gcc"] = True
+#    if not env["builtin_libtheora"]:
+#        env["builtin_libogg"] = False  # Needed to link against system libtheora
+#        env["builtin_libvorbis"] = False  # Needed to link against system libtheora
+#        env.ParseConfig("pkg-config theora theoradec --cflags --libs")
+#    else:
+#        if env["arch"] in ["x86_64", "x86_32"]:
+#            env["x86_libtheora_opt_gcc"] = True
 
     if not env["builtin_libvorbis"]:
         env["builtin_libogg"] = False  # Needed to link against system libvorbis
@@ -353,6 +445,9 @@ def configure(env):
             env.Exit(255)
         env.Append(CPPDEFINES=["X11_ENABLED"])
 
+    if env["wayland"]:
+        env.Append(CPPDEFINES=["WAYLAND_ENABLED"])
+
     env.Append(CPPDEFINES=["UNIX_ENABLED"])
     env.Append(CPPDEFINES=[("_FILE_OFFSET_BITS", 64)])
 
@@ -364,9 +459,9 @@ def configure(env):
             # No pkgconfig file so far, hardcode expected lib name.
             env.Append(LIBS=["glslang", "SPIRV"])
 
-    if env["opengl3"]:
-        env.Append(CPPDEFINES=["GLES3_ENABLED"])
-        env.ParseConfig("pkg-config gl --cflags --libs")
+#    if env["opengl3"]:
+#        env.Append(CPPDEFINES=["GLES3_ENABLED"])
+#        env.ParseConfig("pkg-config gl --cflags --libs")
 
     env.Append(LIBS=["pthread"])
 
@@ -383,19 +478,19 @@ def configure(env):
         import subprocess
         import re
 
-        linker_version_str = subprocess.check_output(
-            [env.subst(env["LINK"]), "-Wl,--version"] + env.subst(env["LINKFLAGS"])
-        ).decode("utf-8")
-        gnu_ld_version = re.search("^GNU ld [^$]*(\d+\.\d+)$", linker_version_str, re.MULTILINE)
-        if not gnu_ld_version:
-            print(
-                "Warning: Creating template binaries enabled for PCK embedding is currently only supported with GNU ld, not gold or LLD."
-            )
-        else:
-            if float(gnu_ld_version.group(1)) >= 2.30:
-                env.Append(LINKFLAGS=["-T", "platform/linuxbsd/pck_embed.ld"])
-            else:
-                env.Append(LINKFLAGS=["-T", "platform/linuxbsd/pck_embed.legacy.ld"])
+#        linker_version_str = subprocess.check_output(
+#            [env.subst(env["LINK"]), "-Wl,--version"] + env.subst(env["LINKFLAGS"])
+#        ).decode("utf-8")
+#        gnu_ld_version = re.search("^GNU ld [^$]*(\d+\.\d+)$", linker_version_str, re.MULTILINE)
+#        if not gnu_ld_version:
+#            print(
+#                "Warning: Creating template binaries enabled for PCK embedding is currently only supported with GNU ld, not gold or LLD."
+#            )
+#        else:
+#            if float(gnu_ld_version.group(1)) >= 2.30:
+#                env.Append(LINKFLAGS=["-T", "platform/linuxbsd/pck_embed.ld"])
+#            else:
+#                env.Append(LINKFLAGS=["-T", "platform/linuxbsd/pck_embed.legacy.ld"])
 
     ## Cross-compilation
     # TODO: Support cross-compilation on architectures other than x86.
