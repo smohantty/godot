@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  export.cpp                                                            */
+/*  detect_prime_egl.h                                                    */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,17 +28,15 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "export.h"
+#ifndef DETECT_PRIME_EGL_H
+#define DETECT_PRIME_EGL_H
 
-#include "editor/export/editor_export.h"
-#include "export_plugin.h"
+#ifdef GLES3_ENABLED
+#ifdef EGL_ENABLED
 
-void register_linuxbsd_exporter() {
-	Ref<EditorExportPlatformLinuxBSD> platform;
-	platform.instantiate();
-	platform->set_name("Linux/X11/Wayland");
-	platform->set_os_name("Linux");
-	platform->set_chmod_flags(0755);
+int detect_prime();
 
-	EditorExport::get_singleton()->add_export_platform(platform);
-}
+#endif // GLES3_ENABLED
+#endif // EGL_ENABLED
+
+#endif // DETECT_PRIME_EGL_H

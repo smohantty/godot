@@ -34,6 +34,10 @@
 #include "main/main.h"
 #include "servers/display_server.h"
 
+#ifdef WAYLAND_ENABLED
+#include "wayland/display_server_wayland.h"
+#endif
+
 #include "modules/modules_enabled.gen.h" // For regex.
 #ifdef MODULE_REGEX_ENABLED
 #include "modules/regex/regex.h"
@@ -1085,6 +1089,10 @@ OS_LinuxBSD::OS_LinuxBSD() {
 
 #ifdef ALSA_ENABLED
 	AudioDriverManager::add_driver(&driver_alsa);
+#endif
+
+#ifdef WAYLAND_ENABLED
+	DisplayServerWayland::register_wayland_driver();
 #endif
 
 #ifdef X11_ENABLED

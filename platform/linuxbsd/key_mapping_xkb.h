@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  export.cpp                                                            */
+/*  key_mapping_xkb.h                                                     */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,17 +28,20 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "export.h"
+#ifndef KEY_MAPPING_XKB_H
+#define KEY_MAPPING_XKB_H
 
-#include "editor/export/editor_export.h"
-#include "export_plugin.h"
+#include "core/os/keyboard.h"
+#include <xkbcommon/xkbcommon.h>
 
-void register_linuxbsd_exporter() {
-	Ref<EditorExportPlatformLinuxBSD> platform;
-	platform.instantiate();
-	platform->set_name("Linux/X11/Wayland");
-	platform->set_os_name("Linux");
-	platform->set_chmod_flags(0755);
+class KeyMappingXKB {
+	KeyMappingXKB(){};
 
-	EditorExport::get_singleton()->add_export_platform(platform);
-}
+public:
+	static Key get_scancode(unsigned int p_code);
+	static xkb_keycode_t get_xkb_keycode(Key p_keycode);
+
+	static Key get_keycode(xkb_keysym_t p_keysym);
+};
+
+#endif // KEY_MAPPING_XKB_H

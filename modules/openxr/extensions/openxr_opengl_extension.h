@@ -97,6 +97,8 @@ private:
 	static XrGraphicsBindingOpenGLWin32KHR graphics_binding_gl;
 #elif ANDROID_ENABLED
 	static XrGraphicsBindingOpenGLESAndroidKHR graphics_binding_gl;
+#elif WAYLAND_ENABLED
+	static XrGraphicsBindingOpenGLWaylandKHR graphics_binding_gl;
 #else
 	static XrGraphicsBindingOpenGLXlibKHR graphics_binding_gl;
 #endif

@@ -33,6 +33,9 @@ elif env["platform"] == "linuxbsd":
     if env["x11"]:
         env_openxr.AppendUnique(CPPDEFINES=["XR_USE_PLATFORM_XLIB"])
 
+    if env["wayland"]:
+        env_openxr.AppendUnique(CPPDEFINES=["XR_USE_PLATFORM_WAYLAND"])
+
     # FIXME: Review what needs to be set for Android and macOS.
     env_openxr.AppendUnique(CPPDEFINES=["HAVE_SECURE_GETENV"])
 elif env["platform"] == "windows":
@@ -91,6 +94,7 @@ if env["platform"] == "android":
 if env["vulkan"]:
     env_openxr.add_source_files(module_obj, "extensions/openxr_vulkan_extension.cpp")
 if env["opengl3"]:
+    # On Linux/BSD, the OpenGL extension should only be enabled when at least X11 is enabled.
     env_openxr.add_source_files(module_obj, "extensions/openxr_opengl_extension.cpp")
 
 env_openxr.add_source_files(module_obj, "extensions/openxr_palm_pose_extension.cpp")

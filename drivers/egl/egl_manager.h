@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  export.cpp                                                            */
+/*  egl_manager.h                                                         */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,17 +28,79 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "export.h"
+#ifndef EGL_MANAGER_H
+#define EGL_MANAGER_H
 
-#include "editor/export/editor_export.h"
-#include "export_plugin.h"
+#ifdef EGL_ENABLED
 
-void register_linuxbsd_exporter() {
-	Ref<EditorExportPlatformLinuxBSD> platform;
-	platform.instantiate();
-	platform->set_name("Linux/X11/Wayland");
-	platform->set_os_name("Linux");
-	platform->set_chmod_flags(0755);
+#ifdef GLAD_ENABLED
+#include "thirdparty/glad/glad/egl.h"
+#else
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
+#endif
 
-	EditorExport::get_singleton()->add_export_platform(platform);
-}
+#include "core/templates/local_vector.h"
+#include "servers/display_server.h"
+
+class EGLManager {
+private:
+	// An EGL-side rappresentation of a display with its own rendering
+	// context.
+	struct GLDisplay {
+		void *display = nullptr;
+
+		EGLDisplay egl_display = EGL_NO_DISPLAY;
+		EGLContext egl_context = EGL_NO_CONTEXT;
+		EGLConfig egl_config;
+	};
+
+	// EGL specific window data.
+	struct GLWindow {
+		bool initialized = false;
+
+		// An handle to the GLDisplay associated with this window.
+		int gldisplay_id = -1;
+
+		EGLSurface egl_surface = EGL_NO_SURFACE;
+	};
+
+	LocalVector<GLDisplay> displays;
+	LocalVector<GLWindow> windows;
+
+	GLWindow *current_window = nullptr;
+
+	// On EGL the default swap interval is 1 and thus vsync is on by defualt.
+	bool use_vsync = true;
+
+	virtual const char *_get_platform_extension_name() const = 0;
+	virtual EGLenum _get_platform_extension_enum() const = 0;
+
+	int _get_gldisplay_id(void *p_display);
+	Error _gldisplay_create_context(GLDisplay &p_gldisplay);
+
+public:
+	int display_get_native_visual_id(void *p_display);
+
+	Error window_create(DisplayServer::WindowID p_window_id, void *p_display, void *p_native_window, int p_width, int p_height);
+
+	void window_destroy(DisplayServer::WindowID p_window_id);
+
+	void release_current();
+	void make_current();
+	void swap_buffers();
+
+	void window_make_current(DisplayServer::WindowID p_window_id);
+
+	void set_use_vsync(bool p_use);
+	bool is_using_vsync() const;
+
+	Error initialize();
+
+	EGLManager();
+	virtual ~EGLManager();
+};
+
+#endif // EGL_ENABLED
+
+#endif // EGL_MANAGER_H

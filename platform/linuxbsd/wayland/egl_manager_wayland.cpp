@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  export.cpp                                                            */
+/*  egl_manager_wayland.cpp                                               */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,17 +28,20 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "export.h"
+#include "egl_manager_wayland.h"
 
-#include "editor/export/editor_export.h"
-#include "export_plugin.h"
+#ifdef WAYLAND_ENABLED
+#ifdef EGL_ENABLED
+#ifdef GLES3_ENABLED
 
-void register_linuxbsd_exporter() {
-	Ref<EditorExportPlatformLinuxBSD> platform;
-	platform.instantiate();
-	platform->set_name("Linux/X11/Wayland");
-	platform->set_os_name("Linux");
-	platform->set_chmod_flags(0755);
-
-	EditorExport::get_singleton()->add_export_platform(platform);
+const char *EGLManagerWayland::_get_platform_extension_name() const {
+	return "EGL_KHR_platform_wayland";
 }
+
+EGLenum EGLManagerWayland::_get_platform_extension_enum() const {
+	return EGL_PLATFORM_WAYLAND_KHR;
+}
+
+#endif // GLES3_ENABLED
+#endif // EGL_ENABLED
+#endif // WAYLAND_ENABLED

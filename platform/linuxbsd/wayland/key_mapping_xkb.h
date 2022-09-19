@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  export.cpp                                                            */
+/*  key_mapping_xkb.h                                                     */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,17 +28,36 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "export.h"
+#ifndef KEY_MAPPING_XKB_H
+#define KEY_MAPPING_XKB_H
 
-#include "editor/export/editor_export.h"
-#include "export_plugin.h"
+#ifdef SOWRAP_ENABLED
+#include "../xkbcommon-so_wrap.h"
+#else
+#include <xkbcommon/xkbcommon.h>
+#endif // SOWRAP_ENABLED
 
-void register_linuxbsd_exporter() {
-	Ref<EditorExportPlatformLinuxBSD> platform;
-	platform.instantiate();
-	platform->set_name("Linux/X11/Wayland");
-	platform->set_os_name("Linux");
-	platform->set_chmod_flags(0755);
+#include "core/os/keyboard.h"
+#include "core/templates/hash_map.h"
 
-	EditorExport::get_singleton()->add_export_platform(platform);
-}
+class KeyMappingXKB {
+	struct HashMapHasherKeys {
+		static _FORCE_INLINE_ uint32_t hash(const Key p_key) { return hash_fmix32(static_cast<uint32_t>(p_key)); }
+		static _FORCE_INLINE_ uint32_t hash(const unsigned p_key) { return hash_fmix32(p_key); }
+	};
+
+	static inline HashMap<xkb_keycode_t, Key, HashMapHasherKeys> xkb_keycode_map;
+	static inline HashMap<unsigned int, Key, HashMapHasherKeys> scancode_map;
+	static inline HashMap<Key, unsigned int, HashMapHasherKeys> scancode_map_inv;
+
+	KeyMappingXKB(){};
+
+public:
+	static void initialize();
+
+	static Key get_keycode(xkb_keysym_t p_keysym);
+	static xkb_keycode_t get_xkb_keycode(Key p_keycode);
+	static Key get_scancode(unsigned int p_code);
+};
+
+#endif // KEY_MAPPING_XKB_H

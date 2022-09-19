@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  export.cpp                                                            */
+/*  vulkan_context_wayland.h                                              */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,17 +28,20 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "export.h"
+#ifndef VULKAN_CONTEXT_WAYLAND_H
+#define VULKAN_CONTEXT_WAYLAND_H
 
-#include "editor/export/editor_export.h"
-#include "export_plugin.h"
+#ifdef VULKAN_ENABLED
 
-void register_linuxbsd_exporter() {
-	Ref<EditorExportPlatformLinuxBSD> platform;
-	platform.instantiate();
-	platform->set_name("Linux/X11/Wayland");
-	platform->set_os_name("Linux");
-	platform->set_chmod_flags(0755);
+#include "drivers/vulkan/vulkan_context.h"
 
-	EditorExport::get_singleton()->add_export_platform(platform);
-}
+class VulkanContextWayland : public VulkanContext {
+	const char *_get_platform_surface_extension() const;
+
+public:
+	Error window_create(DisplayServer::WindowID p_window_id, DisplayServer::VSyncMode p_vsync_mode, struct wl_display *p_display, struct wl_surface *p_surface, int p_width, int p_height);
+};
+
+#endif // VULKAN_ENABLED
+
+#endif // VULKAN_CONTEXT_WAYLAND_H
