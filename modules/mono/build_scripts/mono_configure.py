@@ -350,27 +350,22 @@ def configure(env, env_mono):
             tmpenv.AppendENVPath("PKG_CONFIG_PATH", os.getenv("PKG_CONFIG_PATH"))
             tmpenv.ParseConfig("pkg-config monosgen-2 --libs-only-L")
 
-            pkg_dir = os.getenv("PKG_CONFIG_PATH")
-            pkg_dirs = pkg_dir.split(":")
-            for hint_dir in pkg_dirs:
-                hint_dir = os.path.join(hint_dir, "../../lib")
+            for hint_dir in tmpenv["LIBPATH"]:
                 file_found = find_file_in_dir(hint_dir, mono_lib_names, prefixes=["lib"], extensions=[sharedlib_ext])
                 if file_found:
                     mono_lib_path = hint_dir
                     mono_so_file = file_found
-                    mono_inc_path = os.path.join(mono_lib_path, "../")
-                    env_mono.Prepend(CPPPATH=os.path.join(mono_inc_path, "include", "mono-2.0"))
                     break
 
             if not mono_so_file:
                 raise RuntimeError("Could not find mono shared library in: " + str(tmpenv["LIBPATH"]))
 
-        # if not mono_static:
-        #     libs_output_dir = get_android_out_dir(env) if is_android else "#bin"
-        #     copy_file(mono_lib_path, libs_output_dir, mono_so_file)
+        if not mono_static:
+            libs_output_dir = get_android_out_dir(env) if is_android else "#bin"
+            copy_file(mono_lib_path, libs_output_dir, mono_so_file)
 
     if not tools_enabled:
-        if is_desktop(env["platform"]) and not env["wayland"]:
+        if is_desktop(env["platform"]):
             if not mono_root:
                 mono_root = (
                     subprocess.check_output(["pkg-config", "mono-2", "--variable=prefix"]).decode("utf8").strip()
