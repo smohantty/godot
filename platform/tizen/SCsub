@@ -1,0 +1,11 @@
+#!/usr/bin/env python
+
+Import("env")
+
+files = [
+    "godot_tizen.cpp",
+    "os_tizen.cpp",
+]
+
+prog = env.add_program("#bin/godot", files)
+
